@@ -384,13 +384,38 @@ document.getElementById('copy-sub-btn').addEventListener('click', () => {
 });
 
 function copyText(text, btnId) {
-  navigator.clipboard.writeText(text).then(() => {
-    const btn = document.getElementById(btnId);
-    const orig = btn.textContent;
-    btn.textContent = '✓ 복사됨';
+  const btn = document.getElementById(btnId);
+  const orig = btn.textContent;
+
+  function markCopied() {
+    btn.textContent = '복사완료 ✓';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1800);
-  });
+  }
+
+  // HTTPS/localhost에서는 Clipboard API 사용, HTTP(LAN)에서는 execCommand 폴백
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(markCopied).catch(() => execCopy(text, markCopied));
+  } else {
+    execCopy(text, markCopied);
+  }
+}
+
+function execCopy(text, onSuccess) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+    onSuccess();
+  } catch (e) {
+    alert('복사에 실패했습니다. 텍스트를 직접 선택해 복사해 주세요.');
+  } finally {
+    document.body.removeChild(ta);
+  }
 }
 
 function showError(msg) {

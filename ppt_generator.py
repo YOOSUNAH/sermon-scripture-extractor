@@ -24,6 +24,7 @@ WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 # ── 줄 분리 설정 ──────────────────────────────────────────────────────
 CHARS_PER_LINE = 22   # 한 줄 최대 글자 수 (한국어 기준)
 LINES_PER_SLIDE = 2   # 슬라이드당 최대 줄 수
+MAX_LINE_DISPLAY = 26 # PPT 텍스트박스 한 줄 최대 표시 글자 수 (실측)
 
 # ── 템플릿 슬라이드 인덱스 (ppt_template.pptx 기준) ──────────────────
 IDX_VERSE_NORMAL = 0   # 보조본문 일반 (하단 참조 있음)
@@ -301,7 +302,20 @@ def generate_ppt(template_path: str,
 
             # 마지막 절의 마지막 chunk에 group_ref 추가
             if is_last_verse and chunks:
-                chunks[-1][-1] = chunks[-1][-1] + ' ' + group_ref
+                # 괄호 안 공백을 non-breaking space로 치환 → PPT 내부에서 줄 분리 방지
+                group_ref_safe = group_ref.replace(' ', '\u00A0')
+                last_line = chunks[-1][-1]
+
+                if len(last_line) + 1 + len(group_ref_safe) <= MAX_LINE_DISPLAY:
+                    # 인라인에 붙여도 한 줄 이내 → 그대로 이어붙임
+                    chunks[-1][-1] = last_line + ' ' + group_ref_safe
+                elif len(chunks[-1]) == 1:
+                    # 내용이 1줄뿐 → group_ref를 2번째 줄로 추가
+                    chunks[-1].append(group_ref_safe)
+                else:
+                    # 내용이 이미 2줄 → 마지막 줄을 새 chunk로 옮기고 group_ref를 같이
+                    moved = chunks[-1].pop()
+                    chunks.append([moved, group_ref_safe])
 
             for ci, chunk in enumerate(chunks):
                 is_first_chunk = (ci == 0)
