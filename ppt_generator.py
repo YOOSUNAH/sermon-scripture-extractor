@@ -8,6 +8,12 @@ from pptx import Presentation
 from pptx.util import Pt
 from pptx.dml.color import RGBColor
 from pptx.oxml.ns import qn
+from lxml import etree as _etree
+
+
+def _make_el(tag: str):
+    """Clark notation 또는 prefix:local 태그로 lxml Element 생성."""
+    return _etree.Element(qn(tag) if ':' in tag else tag)
 
 # ── 폰트/색상 상수 ────────────────────────────────────────────────────
 FONT_NAME = '나눔고딕 ExtraBold'
@@ -97,6 +103,10 @@ def extract_verses(para_text: str) -> tuple[str, str, list[tuple[str, str]]]:
 
 # ── PPT 슬라이드 생성 ─────────────────────────────────────────────────
 
+_P_NS = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+_A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+
+
 def _add_slide_from_template(out_prs: Presentation, template_slide) -> object:
     """템플릿 슬라이드의 도형들을 복사해 새 슬라이드를 추가."""
     layout = out_prs.slide_layouts[0]
@@ -112,7 +122,35 @@ def _add_slide_from_template(out_prs: Presentation, template_slide) -> object:
     for shape in template_slide.shapes:
         sp_tree.append(copy.deepcopy(shape.element))
 
+    # 전환 효과 제거
+    for t in new_slide._element.findall(f'{{{_P_NS}}}transition'):
+        new_slide._element.remove(t)
+
     return new_slide
+
+
+def _set_tf_scheme(tf, lines: list[str], font_size: int = None, scheme_color: str = 'bg1'):
+    """schemeClr를 사용해 텍스트 프레임 설정 (설교제목 슬라이드용 — 흰색)."""
+    tf.clear()
+    for i, line in enumerate(lines):
+        para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        run = para.add_run()
+        run.text = line
+        run.font.name = FONT_NAME
+        if font_size:
+            run.font.size = Pt(font_size)
+        # rPr에 scheme color 적용
+        rPr = run._r.find(qn('a:rPr'))
+        if rPr is None:
+            rPr = _make_el('a:rPr')
+            run._r.insert(0, rPr)
+        for el in rPr.findall(f'{{{_A_NS}}}solidFill'):
+            rPr.remove(el)
+        solidFill = _make_el('a:solidFill')
+        schemeClr = _make_el('a:schemeClr')
+        schemeClr.set('val', scheme_color)
+        solidFill.append(schemeClr)
+        rPr.append(solidFill)
 
 
 def _get_shape(slide, name: str):
@@ -174,16 +212,16 @@ def _make_title_slide(out_prs, template_title, passage: str, sermon_title: str):
     """설교제목 슬라이드 생성."""
     slide = _add_slide_from_template(out_prs, template_title)
 
+    # bg1 (배경 흰색 계열) scheme color로 설정 — slide 97과 동일한 방식
     tb3 = _get_shape(slide, 'TextBox 3')
     if tb3 and tb3.has_text_frame:
-        _set_tf(tb3.text_frame, [sermon_title], font_size=40)
+        _set_tf_scheme(tb3.text_frame, [sermon_title], font_size=40)
 
     tb4 = _get_shape(slide, 'TextBox 4')
     if tb4 and tb4.has_text_frame:
-        _set_tf(tb4.text_frame, [passage], font_size=30)
+        _set_tf_scheme(tb4.text_frame, [passage], font_size=30)
 
     # TextBox 1 ("설교제목", 초록색)는 템플릿에서 그대로 유지
-
     return slide
 
 

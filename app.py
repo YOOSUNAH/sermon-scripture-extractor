@@ -7,6 +7,7 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from pptx import Presentation
 from pptx.oxml.ns import qn as pptx_qn
+from lxml import etree
 from ppt_generator import (generate_ppt, parse_title_paragraph,
                             extract_verses, split_to_lines, split_to_slides)
 
@@ -136,61 +137,96 @@ def docx_to_pdf(docx_path: str, out_dir: str) -> str | None:
 
 # ── PPT 병합 ──────────────────────────────────────────────────────────
 
-def _find_sermon_title_slide(prs: Presentation) -> int:
+_P_NS   = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+_P14_NS = 'http://schemas.microsoft.com/office/powerpoint/2010/main'
+
+
+def _find_section(prs: Presentation, name: str):
+    """이름으로 섹션 XML element 반환 (없으면 None)."""
+    prs_el = prs.slides._sldIdLst.getparent()
+    for sec in prs_el.iter(f'{{{_P14_NS}}}section'):
+        if sec.get('name') == name:
+            return sec
+    return None
+
+
+def _section_last_global_pos(prs: Presentation, section_name: str) -> int:
     """
-    PPT에서 '설교제목' 텍스트가 있는 슬라이드 중 가장 마지막 인덱스를 반환.
-    못 찾으면 -1 반환.
+    섹션의 마지막 슬라이드가 global sldIdLst에서 몇 번째 인덱스인지 반환.
+    섹션이 없거나 비어있으면 -1.
     """
-    last_idx = -1
-    for i, slide in enumerate(prs.slides):
-        for shape in slide.shapes:
-            if shape.has_text_frame:
-                for para in shape.text_frame.paragraphs:
-                    text = ''.join(r.text for r in para.runs)
-                    if '설교제목' in text:
-                        last_idx = i
-                        break
-    return last_idx
+    sec = _find_section(prs, section_name)
+    if sec is None:
+        return -1
+    sec_ids = sec.findall(f'{{{_P14_NS}}}sldIdLst/{{{_P14_NS}}}sldId')
+    if not sec_ids:
+        return -1
+    last_sec_id = sec_ids[-1].get('id')
+
+    sldIdLst = prs.slides._sldIdLst
+    for i, sldId in enumerate(list(sldIdLst)):
+        if sldId.get('id') == last_sec_id:
+            return i
+    return -1
 
 
 def merge_ppt(input_ppt_bytes: bytes, generated_ppt_bytes: bytes) -> bytes:
     """
-    input_ppt에 generated_ppt 슬라이드들을 '설교제목' 슬라이드 직후에 삽입.
-    삽입 위치를 못 찾으면 슬라이드 전체 끝에 추가.
+    input_ppt의 '보조본문' 섹션에 generated_ppt 슬라이드를 삽입.
+    '보조본문' 섹션이 없으면 '본문' 섹션 끝 뒤에 삽입.
     """
     base_prs = Presentation(io.BytesIO(input_ppt_bytes))
     gen_prs  = Presentation(io.BytesIO(generated_ppt_bytes))
 
-    insert_after = _find_sermon_title_slide(base_prs)
-    insert_pos = insert_after + 1  # 해당 슬라이드 바로 뒤, -1이면 0(맨 앞→실제론 끝에 붙임)
-
-    # 삽입 위치가 -1이면 맨 끝으로
-    if insert_after == -1:
-        insert_pos = len(base_prs.slides)
-
     sldIdLst = base_prs.slides._sldIdLst
 
+    # 삽입 위치 결정: '본문' 섹션 끝 바로 다음
+    insert_pos = _section_last_global_pos(base_prs, '본문')
+    if insert_pos == -1:
+        insert_pos = len(base_prs.slides) - 1
+    insert_pos += 1   # 본문 마지막 슬라이드 다음
+
+    # '보조본문' 섹션 XML element 및 sldIdLst
+    bojobon_sec = _find_section(base_prs, '보조본문')
+    bojobon_sec_sldIdLst = None
+    if bojobon_sec is not None:
+        bojobon_sec_sldIdLst = bojobon_sec.find(f'{{{_P14_NS}}}sldIdLst')
+        if bojobon_sec_sldIdLst is None:
+            bojobon_sec_sldIdLst = etree.SubElement(
+                bojobon_sec, f'{{{_P14_NS}}}sldIdLst')
+
     for gen_slide in gen_prs.slides:
-        # 새 슬라이드 레이아웃 추가
         layout = base_prs.slide_layouts[0]
         new_slide = base_prs.slides.add_slide(layout)
 
         # 레이아웃 자동 도형 제거
         sp_tree = new_slide.shapes._spTree
         for child in list(sp_tree):
-            tag = child.tag
-            if tag not in (pptx_qn('p:nvGrpSpPr'), pptx_qn('p:grpSpPr')):
+            if child.tag not in (pptx_qn('p:nvGrpSpPr'), pptx_qn('p:grpSpPr')):
                 sp_tree.remove(child)
 
         # 생성 슬라이드 도형 복사
         for shape in gen_slide.shapes:
             sp_tree.append(copy.deepcopy(shape.element))
 
-        # 방금 추가된 슬라이드 XML 요소를 원하는 위치로 이동
+        # 전환 효과 제거
+        for t in new_slide._element.findall(f'{{{_P_NS}}}transition'):
+            new_slide._element.remove(t)
+
+        # 방금 추가된 sldId 요소 가져오기
         added_sldId = sldIdLst[-1]
+        new_id = added_sldId.get('id')
+
+        # global sldIdLst에서 올바른 위치로 이동
         sldIdLst.remove(added_sldId)
         sldIdLst.insert(insert_pos, added_sldId)
         insert_pos += 1
+
+        # '보조본문' 섹션 XML에 슬라이드 ID 등록
+        if bojobon_sec_sldIdLst is not None:
+            sec_sldId = etree.SubElement(
+                bojobon_sec_sldIdLst, f'{{{_P14_NS}}}sldId')
+            sec_sldId.set('id', new_id)
 
     buf = io.BytesIO()
     base_prs.save(buf)
