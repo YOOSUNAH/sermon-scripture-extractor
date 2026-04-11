@@ -337,7 +337,22 @@ def download(session_id, file_type):
 
 
 if __name__ == '__main__':
-    import sys
+    import sys, signal
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+
+    # 기존 프로세스가 포트를 점유 중이면 종료
+    try:
+        result = subprocess.run(
+            ['lsof', '-ti', f':{port}'],
+            capture_output=True, text=True
+        )
+        pids = result.stdout.strip().split()
+        for pid in pids:
+            if pid and int(pid) != os.getpid():
+                os.kill(int(pid), signal.SIGKILL)
+                print(f'포트 {port} 사용 중인 프로세스 {pid} 종료')
+    except Exception:
+        pass
+
     print(f'서버 시작 → http://0.0.0.0:{port}/')
     app.run(host='0.0.0.0', port=port, debug=False)
