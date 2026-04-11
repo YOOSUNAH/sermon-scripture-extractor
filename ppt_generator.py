@@ -129,28 +129,33 @@ def _add_slide_from_template(out_prs: Presentation, template_slide) -> object:
     return new_slide
 
 
-def _set_tf_scheme(tf, lines: list[str], font_size: int = None, scheme_color: str = 'bg1'):
-    """schemeClr를 사용해 텍스트 프레임 설정 (설교제목 슬라이드용 — 흰색)."""
-    tf.clear()
-    for i, line in enumerate(lines):
-        para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        run = para.add_run()
-        run.text = line
-        run.font.name = FONT_NAME
-        if font_size:
-            run.font.size = Pt(font_size)
-        # rPr에 scheme color 적용
-        rPr = run._r.find(qn('a:rPr'))
-        if rPr is None:
-            rPr = _make_el('a:rPr')
-            run._r.insert(0, rPr)
-        for el in rPr.findall(f'{{{_A_NS}}}solidFill'):
-            rPr.remove(el)
-        solidFill = _make_el('a:solidFill')
-        schemeClr = _make_el('a:schemeClr')
-        schemeClr.set('val', scheme_color)
-        solidFill.append(schemeClr)
-        rPr.append(solidFill)
+def _replace_tf_text(tf, text: str):
+    """
+    텍스트 프레임의 텍스트만 교체 — 포맷팅(색상·폰트·lang 등) 완전 보존.
+    템플릿에서 복사된 run의 XML 구조를 그대로 유지한 채 텍스트 내용만 바꾼다.
+    """
+    # 첫 번째 paragraph의 모든 run 텍스트를 합쳐서 첫 run 하나로 만듦
+    paras = tf.paragraphs
+    if not paras:
+        return
+    first_para = paras[0]
+    runs = first_para.runs
+    if runs:
+        # 첫 번째 run에 전체 텍스트 설정
+        runs[0]._r.find(qn('a:t')).text = text
+        # 나머지 run 제거
+        for r in runs[1:]:
+            r._r.getparent().remove(r._r)
+    else:
+        # run이 없으면 a:t 직접 추가
+        r_el = _make_el('a:r')
+        t_el = _make_el('a:t')
+        t_el.text = text
+        r_el.append(t_el)
+        first_para._p.append(r_el)
+    # 두 번째 이후 paragraph 제거
+    for para in paras[1:]:
+        para._p.getparent().remove(para._p)
 
 
 def _get_shape(slide, name: str):
@@ -212,14 +217,14 @@ def _make_title_slide(out_prs, template_title, passage: str, sermon_title: str):
     """설교제목 슬라이드 생성."""
     slide = _add_slide_from_template(out_prs, template_title)
 
-    # bg1 (배경 흰색 계열) scheme color로 설정 — slide 97과 동일한 방식
+    # 텍스트만 교체 — 템플릿의 schemeClr bg1, lang, a:latin, a:ea 등 포맷 그대로 유지
     tb3 = _get_shape(slide, 'TextBox 3')
     if tb3 and tb3.has_text_frame:
-        _set_tf_scheme(tb3.text_frame, [sermon_title], font_size=40)
+        _replace_tf_text(tb3.text_frame, sermon_title)
 
     tb4 = _get_shape(slide, 'TextBox 4')
     if tb4 and tb4.has_text_frame:
-        _set_tf_scheme(tb4.text_frame, [passage], font_size=30)
+        _replace_tf_text(tb4.text_frame, passage)
 
     # TextBox 1 ("설교제목", 초록색)는 템플릿에서 그대로 유지
     return slide
