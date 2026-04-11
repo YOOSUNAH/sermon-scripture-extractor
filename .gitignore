@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# 예시 파일 (저작권)
+*.docx
+*.pdf
+
+# 서버 로그
+server.log
+*.log
+
+# macOS
+.DS_Store
+
+# 업로드 임시 파일
+uploads/

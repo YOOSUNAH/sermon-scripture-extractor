@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>설교문 처리기</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    padding: 48px 40px;
+    max-width: 560px;
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #1a202c;
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    color: #718096;
+    font-size: 0.9rem;
+    margin-bottom: 36px;
+  }
+
+  .drop-zone {
+    border: 2px dashed #cbd5e0;
+    border-radius: 12px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #f7fafc;
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: #4299e1;
+    background: #ebf8ff;
+  }
+
+  .drop-zone .icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .drop-zone p {
+    color: #4a5568;
+    font-size: 0.95rem;
+  }
+
+  .drop-zone .hint {
+    color: #a0aec0;
+    font-size: 0.82rem;
+    margin-top: 6px;
+  }
+
+  #file-input { display: none; }
+
+  .file-selected {
+    margin-top: 14px;
+    background: #ebf8ff;
+    border: 1px solid #bee3f8;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.88rem;
+    color: #2b6cb0;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .file-selected.show { display: flex; }
+
+  .btn {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px;
+    background: #3182ce;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .btn:hover:not(:disabled) { background: #2b6cb0; }
+  .btn:disabled { background: #a0aec0; cursor: not-allowed; }
+
+  .progress-wrap {
+    display: none;
+    margin-top: 20px;
+  }
+
+  .progress-wrap.show { display: block; }
+
+  .progress-bar-bg {
+    background: #e2e8f0;
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: #3182ce;
+    border-radius: 999px;
+    width: 0%;
+    transition: width 0.3s;
+    animation: progress-anim 2s ease-in-out infinite;
+  }
+
+  @keyframes progress-anim {
+    0%   { width: 10%; }
+    50%  { width: 80%; }
+    100% { width: 95%; }
+  }
+
+  .status-msg {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 0.88rem;
+    color: #4a5568;
+  }
+
+  .result-box {
+    display: none;
+    margin-top: 24px;
+    background: #f0fff4;
+    border: 1px solid #9ae6b4;
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .result-box.show { display: block; }
+
+  .result-box h3 {
+    font-size: 0.95rem;
+    color: #276749;
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
+
+  .download-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid #c6f6d5;
+    border-radius: 8px;
+    padding: 12px 16px;
+    text-decoration: none;
+    color: #276749;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background 0.15s;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .download-btn:hover { background: #f0fff4; }
+
+  .error-box {
+    display: none;
+    margin-top: 20px;
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: 10px;
+    padding: 16px;
+    color: #c53030;
+    font-size: 0.88rem;
+  }
+
+  .error-box.show { display: block; }
+
+  .legend {
+    margin-top: 32px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 20px;
+  }
+
+  .legend h4 {
+    font-size: 0.85rem;
+    color: #718096;
+    font-weight: 600;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    color: #4a5568;
+    margin-bottom: 8px;
+  }
+
+  .legend-swatch {
+    width: 32px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .swatch-red { background: #ff4444; }
+  .swatch-yellow { background: #FFD700; text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📖 설교문 처리기</h1>
+  <p class="subtitle">DOCX 파일을 업로드하면 본문·보조본문을 자동으로 색상 표시합니다.</p>
+
+  <div class="drop-zone" id="drop-zone">
+    <span class="icon">📄</span>
+    <p>여기에 DOCX 파일을 끌어다 놓거나 클릭하여 선택</p>
+    <p class="hint">.docx 파일만 지원 · 최대 50MB</p>
+    <input type="file" id="file-input" accept=".docx">
+  </div>
+
+  <div class="file-selected" id="file-selected">
+    <span>📎</span>
+    <span id="file-name-display"></span>
+  </div>
+
+  <button class="btn" id="process-btn" disabled>처리 시작</button>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-bar-bg"><div class="progress-bar"></div></div>
+    <div class="status-msg" id="status-msg">처리 중…</div>
+  </div>
+
+  <div class="result-box" id="result-box">
+    <h3>✅ 처리 완료 — ZIP 파일을 다운로드하세요</h3>
+    <a class="download-btn" id="download-link" href="#" download>
+      <span>⬇️</span>
+      <span id="download-label">결과 다운로드 (ZIP)</span>
+    </a>
+  </div>
+
+  <div class="error-box" id="error-box"></div>
+
+  <div class="legend">
+    <h4>처리 규칙</h4>
+    <div class="legend-item">
+      <div class="legend-swatch swatch-red"></div>
+      <span><strong>빨간색</strong> — <code>숫자:숫자</code>로 시작하는 단락 (본문)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch swatch-yellow"></div>
+      <span><strong>노란 밑줄</strong> — <code>문자 숫자:숫자</code>로 시작하는 단락 (보조본문)</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const fileSelected = document.getElementById('file-selected');
+const fileNameDisplay = document.getElementById('file-name-display');
+const processBtn = document.getElementById('process-btn');
+const progressWrap = document.getElementById('progress-wrap');
+const statusMsg = document.getElementById('status-msg');
+const resultBox = document.getElementById('result-box');
+const downloadLink = document.getElementById('download-link');
+const downloadLabel = document.getElementById('download-label');
+const errorBox = document.getElementById('error-box');
+
+let selectedFile = null;
+
+dropZone.addEventListener('click', () => fileInput.click());
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(file);
+});
+
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) setFile(e.target.files[0]);
+});
+
+function setFile(file) {
+  if (!file.name.toLowerCase().endsWith('.docx')) {
+    showError('DOCX 파일만 업로드 가능합니다.');
+    return;
+  }
+  selectedFile = file;
+  fileNameDisplay.textContent = file.name;
+  fileSelected.classList.add('show');
+  processBtn.disabled = false;
+  resultBox.classList.remove('show');
+  errorBox.classList.remove('show');
+}
+
+processBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+
+  processBtn.disabled = true;
+  progressWrap.classList.add('show');
+  resultBox.classList.remove('show');
+  errorBox.classList.remove('show');
+  statusMsg.textContent = '처리 중… (PDF 변환 포함 시 시간이 걸릴 수 있습니다)';
+
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+
+  try {
+    const resp = await fetch('/process', { method: 'POST', body: formData });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: '서버 오류' }));
+      throw new Error(err.error || '처리 실패');
+    }
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const baseName = selectedFile.name.replace(/\.docx$/i, '');
+    downloadLink.href = url;
+    downloadLink.download = `${baseName}_result.zip`;
+    downloadLabel.textContent = `${baseName}_result.zip 다운로드`;
+
+    progressWrap.classList.remove('show');
+    resultBox.classList.add('show');
+  } catch (err) {
+    showError(err.message);
+    progressWrap.classList.remove('show');
+  } finally {
+    processBtn.disabled = false;
+  }
+});
+
+function showError(msg) {
+  errorBox.textContent = '⚠️ ' + msg;
+  errorBox.classList.add('show');
+}
+</script>
+</body>
+</html>
