@@ -10,6 +10,7 @@ env/
 *.docx
 *.pdf
 *.pptx
+!ppt_template.pptx
 
 # 서버 로그
 server.log
