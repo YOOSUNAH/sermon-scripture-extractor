@@ -9,6 +9,7 @@ env/
 # 예시 파일 (저작권)
 *.docx
 *.pdf
+*.pptx
 
 # 서버 로그
 server.log

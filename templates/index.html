@@ -5,353 +5,260 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>설교문 처리기</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  background: #f0f4f8;
+  min-height: 100vh;
+  padding: 24px 16px;
+}
+.wrap { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
-  body {
-    font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-    background: #f0f4f8;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-  }
+/* ── 카드 공통 ── */
+.card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 16px rgba(0,0,0,.08);
+  padding: 28px 28px;
+}
+h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
+.subtitle { color: #718096; font-size: .88rem; margin-bottom: 24px; }
 
-  .card {
-    background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
-    padding: 48px 40px;
-    max-width: 560px;
-    width: 100%;
-  }
+/* ── 드롭존 ── */
+.drop-zone {
+  border: 2px dashed #cbd5e0;
+  border-radius: 10px;
+  padding: 40px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .18s;
+  background: #f7fafc;
+}
+.drop-zone:hover, .drop-zone.drag-over { border-color: #4299e1; background: #ebf8ff; }
+.drop-zone .icon { font-size: 2.6rem; display: block; margin-bottom: 10px; }
+.drop-zone p { color: #4a5568; font-size: .93rem; }
+.drop-zone .hint { color: #a0aec0; font-size: .8rem; margin-top: 5px; }
+#file-input { display: none; }
 
-  h1 {
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: #1a202c;
-    margin-bottom: 6px;
-  }
+.file-selected {
+  display: none; align-items: center; gap: 8px;
+  margin-top: 12px;
+  background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px;
+  padding: 9px 14px; font-size: .86rem; color: #2b6cb0;
+}
+.file-selected.show { display: flex; }
 
-  .subtitle {
-    color: #718096;
-    font-size: 0.9rem;
-    margin-bottom: 36px;
-  }
+.btn-primary {
+  display: block; width: 100%; margin-top: 16px;
+  padding: 13px; background: #3182ce; color: #fff;
+  border: none; border-radius: 9px;
+  font-size: .97rem; font-weight: 600; cursor: pointer; transition: background .18s;
+}
+.btn-primary:hover:not(:disabled) { background: #2b6cb0; }
+.btn-primary:disabled { background: #a0aec0; cursor: not-allowed; }
 
-  .drop-zone {
-    border: 2px dashed #cbd5e0;
-    border-radius: 12px;
-    padding: 48px 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: #f7fafc;
-  }
+/* ── 진행 ── */
+.progress-wrap { display: none; margin-top: 16px; }
+.progress-wrap.show { display: block; }
+.progress-bar-bg { background: #e2e8f0; border-radius: 999px; height: 7px; overflow: hidden; }
+.progress-bar { height: 100%; background: #3182ce; border-radius: 999px;
+  animation: prog 2.5s ease-in-out infinite; }
+@keyframes prog { 0%{width:8%} 60%{width:85%} 100%{width:95%} }
+.prog-msg { text-align: center; margin-top: 8px; font-size: .84rem; color: #718096; }
 
-  .drop-zone:hover, .drop-zone.drag-over {
-    border-color: #4299e1;
-    background: #ebf8ff;
-  }
+/* ── 다운로드 버튼 ── */
+.result-card { display: none; }
+.result-card.show { display: block; }
+.result-card h3 { font-size: .93rem; font-weight: 600; color: #276749; margin-bottom: 14px; }
+.dl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.dl-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: #f7fafc; border: 1.5px solid #e2e8f0; border-radius: 10px;
+  padding: 16px 8px; text-decoration: none; color: #2d3748;
+  font-size: .82rem; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+}
+.dl-btn:hover { background: #ebf8ff; border-color: #90cdf4; color: #2b6cb0; }
+.dl-btn .icon { font-size: 1.8rem; }
+.dl-btn.disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
 
-  .drop-zone .icon {
-    font-size: 3rem;
-    margin-bottom: 12px;
-    display: block;
-  }
+/* ── 텍스트 패널 ── */
+.text-panel { display: none; }
+.text-panel.show { display: block; }
+.text-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+}
+.text-panel-header h3 { font-size: .93rem; font-weight: 600; color: #2d3748; }
+.copy-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-copy {
+  padding: 6px 14px; background: #edf2f7; border: 1px solid #e2e8f0;
+  border-radius: 6px; font-size: .8rem; font-weight: 600; cursor: pointer;
+  color: #4a5568; transition: all .15s;
+}
+.btn-copy:hover { background: #e2e8f0; color: #2d3748; }
+.btn-copy.copied { background: #c6f6d5; border-color: #9ae6b4; color: #276749; }
 
-  .drop-zone p {
-    color: #4a5568;
-    font-size: 0.95rem;
-  }
+.refs-box {
+  background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 16px 18px; font-size: .88rem; line-height: 1.85;
+  color: #2d3748; white-space: pre-wrap; word-break: break-word;
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', monospace;
+  max-height: 420px; overflow-y: auto;
+}
 
-  .drop-zone .hint {
-    color: #a0aec0;
-    font-size: 0.82rem;
-    margin-top: 6px;
-  }
+/* ── 에러 ── */
+.error-box {
+  display: none; margin-top: 14px;
+  background: #fff5f5; border: 1px solid #fed7d7; border-radius: 9px;
+  padding: 14px 16px; color: #c53030; font-size: .86rem;
+}
+.error-box.show { display: block; }
 
-  #file-input { display: none; }
-
-  .file-selected {
-    margin-top: 14px;
-    background: #ebf8ff;
-    border: 1px solid #bee3f8;
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 0.88rem;
-    color: #2b6cb0;
-    display: none;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .file-selected.show { display: flex; }
-
-  .btn {
-    display: block;
-    width: 100%;
-    margin-top: 20px;
-    padding: 14px;
-    background: #3182ce;
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .btn:hover:not(:disabled) { background: #2b6cb0; }
-  .btn:disabled { background: #a0aec0; cursor: not-allowed; }
-
-  .progress-wrap {
-    display: none;
-    margin-top: 20px;
-  }
-
-  .progress-wrap.show { display: block; }
-
-  .progress-bar-bg {
-    background: #e2e8f0;
-    border-radius: 999px;
-    height: 8px;
-    overflow: hidden;
-  }
-
-  .progress-bar {
-    height: 100%;
-    background: #3182ce;
-    border-radius: 999px;
-    width: 0%;
-    transition: width 0.3s;
-    animation: progress-anim 2s ease-in-out infinite;
-  }
-
-  @keyframes progress-anim {
-    0%   { width: 10%; }
-    50%  { width: 80%; }
-    100% { width: 95%; }
-  }
-
-  .status-msg {
-    text-align: center;
-    margin-top: 10px;
-    font-size: 0.88rem;
-    color: #4a5568;
-  }
-
-  .result-box {
-    display: none;
-    margin-top: 24px;
-    background: #f0fff4;
-    border: 1px solid #9ae6b4;
-    border-radius: 10px;
-    padding: 20px;
-  }
-
-  .result-box.show { display: block; }
-
-  .result-box h3 {
-    font-size: 0.95rem;
-    color: #276749;
-    margin-bottom: 14px;
-    font-weight: 600;
-  }
-
-  .download-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #fff;
-    border: 1px solid #c6f6d5;
-    border-radius: 8px;
-    padding: 12px 16px;
-    text-decoration: none;
-    color: #276749;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: background 0.15s;
-    cursor: pointer;
-    width: 100%;
-    margin-top: 0;
-  }
-
-  .download-btn:hover { background: #f0fff4; }
-
-  .error-box {
-    display: none;
-    margin-top: 20px;
-    background: #fff5f5;
-    border: 1px solid #fed7d7;
-    border-radius: 10px;
-    padding: 16px;
-    color: #c53030;
-    font-size: 0.88rem;
-  }
-
-  .error-box.show { display: block; }
-
-  .legend {
-    margin-top: 32px;
-    border-top: 1px solid #e2e8f0;
-    padding-top: 20px;
-  }
-
-  .legend h4 {
-    font-size: 0.85rem;
-    color: #718096;
-    font-weight: 600;
-    margin-bottom: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 0.85rem;
-    color: #4a5568;
-    margin-bottom: 8px;
-  }
-
-  .legend-swatch {
-    width: 32px;
-    height: 14px;
-    border-radius: 3px;
-    flex-shrink: 0;
-  }
-
-  .swatch-red { background: #ff4444; }
-  .swatch-yellow { background: #FFD700; text-decoration: underline; }
+/* ── 범례 ── */
+.legend { border-top: 1px solid #e2e8f0; padding-top: 18px; margin-top: 4px; }
+.legend-title { font-size: .78rem; color: #a0aec0; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 10px; }
+.legend-item { display: flex; align-items: center; gap: 10px; font-size: .83rem; color: #4a5568; margin-bottom: 7px; }
+.swatch { width: 28px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.swatch-red { background: #ff4444; }
+.swatch-yellow { background: #ffd700; }
 </style>
 </head>
 <body>
-<div class="card">
-  <h1>📖 설교문 처리기</h1>
-  <p class="subtitle">DOCX 파일을 업로드하면 본문·보조본문을 자동으로 색상 표시합니다.</p>
+<div class="wrap">
 
-  <div class="drop-zone" id="drop-zone">
-    <span class="icon">📄</span>
-    <p>여기에 DOCX 파일을 끌어다 놓거나 클릭하여 선택</p>
-    <p class="hint">.docx 파일만 지원 · 최대 50MB</p>
-    <input type="file" id="file-input" accept=".docx">
-  </div>
+  <!-- 업로드 카드 -->
+  <div class="card">
+    <h1>📖 설교문 처리기</h1>
+    <p class="subtitle">DOCX 파일을 업로드하면 본문·보조본문을 자동으로 색상 표시하고 참조를 추출합니다.</p>
 
-  <div class="file-selected" id="file-selected">
-    <span>📎</span>
-    <span id="file-name-display"></span>
-  </div>
-
-  <button class="btn" id="process-btn" disabled>처리 시작</button>
-
-  <div class="progress-wrap" id="progress-wrap">
-    <div class="progress-bar-bg"><div class="progress-bar"></div></div>
-    <div class="status-msg" id="status-msg">처리 중…</div>
-  </div>
-
-  <div class="result-box" id="result-box">
-    <h3>✅ 처리 완료 — ZIP 파일을 다운로드하세요</h3>
-    <a class="download-btn" id="download-link" href="#" download>
-      <span>⬇️</span>
-      <span id="download-label">결과 다운로드 (ZIP)</span>
-    </a>
-  </div>
-
-  <div class="error-box" id="error-box"></div>
-
-  <div class="legend">
-    <h4>처리 규칙</h4>
-    <div class="legend-item">
-      <div class="legend-swatch swatch-red"></div>
-      <span><strong>빨간색</strong> — <code>숫자:숫자</code>로 시작하는 단락 (본문)</span>
+    <div class="drop-zone" id="drop-zone">
+      <span class="icon">📄</span>
+      <p>여기에 DOCX 파일을 끌어다 놓거나 클릭하여 선택</p>
+      <p class="hint">.docx 파일만 지원 · 최대 50MB</p>
+      <input type="file" id="file-input" accept=".docx">
     </div>
-    <div class="legend-item">
-      <div class="legend-swatch swatch-yellow"></div>
-      <span><strong>노란 밑줄</strong> — <code>문자 숫자:숫자</code>로 시작하는 단락 (보조본문)</span>
+
+    <div class="file-selected" id="file-selected">
+      <span>📎</span><span id="file-name-display"></span>
+    </div>
+
+    <button class="btn-primary" id="process-btn" disabled>처리 시작</button>
+
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar-bg"><div class="progress-bar"></div></div>
+      <p class="prog-msg">처리 중… PDF·PPT 변환 포함 시 시간이 걸릴 수 있습니다</p>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+
+    <div class="legend">
+      <div class="legend-title">처리 규칙</div>
+      <div class="legend-item"><div class="swatch swatch-red"></div><span><strong>빨간색</strong> — <code>숫자:숫자</code>로 시작하는 단락 (본문)</span></div>
+      <div class="legend-item"><div class="swatch swatch-yellow"></div><span><strong>노란 밑줄</strong> — <code>문자 숫자:숫자</code>로 시작하는 단락 (보조본문)</span></div>
     </div>
   </div>
+
+  <!-- 다운로드 카드 -->
+  <div class="card result-card" id="result-card">
+    <h3>✅ 처리 완료 — 파일을 개별 다운로드하세요</h3>
+    <div class="dl-grid">
+      <a class="dl-btn" id="dl-docx" href="#" download>
+        <span class="icon">📝</span>
+        <span>DOCX</span>
+        <span id="dl-docx-name" style="font-weight:400;color:#718096;font-size:.75rem;text-align:center"></span>
+      </a>
+      <a class="dl-btn" id="dl-pdf" href="#">
+        <span class="icon">📕</span>
+        <span>PDF</span>
+        <span id="dl-pdf-name" style="font-weight:400;color:#718096;font-size:.75rem;text-align:center"></span>
+      </a>
+      <a class="dl-btn" id="dl-ppt" href="#">
+        <span class="icon">📊</span>
+        <span>PPT</span>
+        <span id="dl-ppt-name" style="font-weight:400;color:#718096;font-size:.75rem;text-align:center"></span>
+      </a>
+    </div>
+  </div>
+
+  <!-- 텍스트 패널 -->
+  <div class="card text-panel" id="text-panel">
+    <div class="text-panel-header">
+      <h3>📋 추출된 구절 참조</h3>
+      <div class="copy-btns">
+        <button class="btn-copy" id="copy-all-btn">전체 복사</button>
+        <button class="btn-copy" id="copy-sub-btn">보조본문만 복사</button>
+      </div>
+    </div>
+    <div class="refs-box" id="refs-box"></div>
+  </div>
+
 </div>
 
 <script>
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
+const dropZone   = document.getElementById('drop-zone');
+const fileInput  = document.getElementById('file-input');
 const fileSelected = document.getElementById('file-selected');
 const fileNameDisplay = document.getElementById('file-name-display');
 const processBtn = document.getElementById('process-btn');
 const progressWrap = document.getElementById('progress-wrap');
-const statusMsg = document.getElementById('status-msg');
-const resultBox = document.getElementById('result-box');
-const downloadLink = document.getElementById('download-link');
-const downloadLabel = document.getElementById('download-label');
-const errorBox = document.getElementById('error-box');
+const resultCard = document.getElementById('result-card');
+const textPanel  = document.getElementById('text-panel');
+const refsBox    = document.getElementById('refs-box');
+const errorBox   = document.getElementById('error-box');
 
 let selectedFile = null;
+let currentSessionId = null;
 
 dropZone.addEventListener('click', () => fileInput.click());
-
-dropZone.addEventListener('dragover', e => {
-  e.preventDefault();
-  dropZone.classList.add('drag-over');
-});
-
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-
 dropZone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropZone.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) setFile(file);
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
 });
-
-fileInput.addEventListener('change', e => {
-  if (e.target.files[0]) setFile(e.target.files[0]);
-});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
 
 function setFile(file) {
-  if (!file.name.toLowerCase().endsWith('.docx')) {
-    showError('DOCX 파일만 업로드 가능합니다.');
-    return;
-  }
+  if (!file.name.toLowerCase().endsWith('.docx')) { showError('DOCX 파일만 업로드 가능합니다.'); return; }
   selectedFile = file;
   fileNameDisplay.textContent = file.name;
   fileSelected.classList.add('show');
   processBtn.disabled = false;
-  resultBox.classList.remove('show');
+  resultCard.classList.remove('show');
+  textPanel.classList.remove('show');
   errorBox.classList.remove('show');
 }
 
 processBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
-
   processBtn.disabled = true;
   progressWrap.classList.add('show');
-  resultBox.classList.remove('show');
+  resultCard.classList.remove('show');
+  textPanel.classList.remove('show');
   errorBox.classList.remove('show');
-  statusMsg.textContent = '처리 중… (PDF 변환 포함 시 시간이 걸릴 수 있습니다)';
 
-  const formData = new FormData();
-  formData.append('file', selectedFile);
+  const form = new FormData();
+  form.append('file', selectedFile);
 
   try {
-    const resp = await fetch('/process', { method: 'POST', body: formData });
+    const resp = await fetch('/process', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '서버 오류');
 
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: '서버 오류' }));
-      throw new Error(err.error || '처리 실패');
-    }
+    currentSessionId = data.session_id;
 
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const baseName = selectedFile.name.replace(/\.docx$/i, '');
-    downloadLink.href = url;
-    downloadLink.download = `${baseName}_result.zip`;
-    downloadLabel.textContent = `${baseName}_result.zip 다운로드`;
+    // 다운로드 버튼 설정
+    setupDlBtn('dl-docx', 'dl-docx-name', data.session_id, 'docx', data.docx_name, true);
+    setupDlBtn('dl-pdf',  'dl-pdf-name',  data.session_id, 'pdf',  data.pdf_name,  data.has_pdf);
+    setupDlBtn('dl-ppt',  'dl-ppt-name',  data.session_id, 'ppt',  data.ppt_name,  data.has_ppt);
+
+    // 텍스트 표시
+    refsBox.textContent = data.refs_text;
 
     progressWrap.classList.remove('show');
-    resultBox.classList.add('show');
+    resultCard.classList.add('show');
+    textPanel.classList.add('show');
   } catch (err) {
     showError(err.message);
     progressWrap.classList.remove('show');
@@ -359,6 +266,42 @@ processBtn.addEventListener('click', async () => {
     processBtn.disabled = false;
   }
 });
+
+function setupDlBtn(btnId, nameId, sessionId, fileType, fileName, available) {
+  const btn = document.getElementById(btnId);
+  const nameEl = document.getElementById(nameId);
+  nameEl.textContent = fileName;
+  if (available) {
+    btn.href = `/download/${sessionId}/${fileType}`;
+    btn.classList.remove('disabled');
+  } else {
+    btn.href = '#';
+    btn.classList.add('disabled');
+    nameEl.textContent = '생성 실패';
+  }
+}
+
+// ── 복사 버튼 ──────────────────────────────────────────────────────
+document.getElementById('copy-all-btn').addEventListener('click', () => {
+  copyText(refsBox.textContent, 'copy-all-btn');
+});
+
+document.getElementById('copy-sub-btn').addEventListener('click', () => {
+  const text = refsBox.textContent;
+  const idx = text.indexOf('보조본문');
+  const sub = idx >= 0 ? text.slice(idx) : text;
+  copyText(sub, 'copy-sub-btn');
+});
+
+function copyText(text, btnId) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById(btnId);
+    const orig = btn.textContent;
+    btn.textContent = '✓ 복사됨';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1800);
+  });
+}
 
 function showError(msg) {
   errorBox.textContent = '⚠️ ' + msg;
