@@ -277,26 +277,40 @@ def generate_ppt(template_path: str,
         else:
             group_ref = f'({book} {chapter}:{v_min}-{v_max})'
 
-        # 이 그룹의 모든 슬라이드 정보를 먼저 계산
-        group_slides = []  # list of dict
+        # 이 그룹의 모든 슬라이드 정보를 계산 (carry-over 적용)
+        # 마지막 chunk가 LINES_PER_SLIDE 미만이면 다음 절에 단어를 넘겨 재결합 → 빈 슬라이드 방지
+        group_slides = []
+        carry_words = []  # 이전 절의 마지막 부분 단어들
+
         for vi, (verse_num, verse_text) in enumerate(verses):
             is_last_verse = (vi == len(verses) - 1)
-            lines = split_to_lines(verse_text)
+
+            # carry 단어 + 현재 절 단어 결합
+            combined_words = carry_words + verse_text.split()
+            carry_words = []
+
+            lines = split_to_lines(' '.join(combined_words))
             chunks = split_to_slides(lines)
+
+            # 마지막 절이 아니고, 마지막 chunk가 한 줄 미만이면 다음 절로 carry
+            if not is_last_verse and chunks and len(chunks[-1]) < LINES_PER_SLIDE:
+                carry_words = ' '.join(chunks[-1]).split()
+                chunks = chunks[:-1]
+                if not chunks:
+                    continue  # 이 절 전체를 다음 절로 넘김
+
+            # 마지막 절의 마지막 chunk에 group_ref 추가
+            if is_last_verse and chunks:
+                chunks[-1][-1] = chunks[-1][-1] + ' ' + group_ref
 
             for ci, chunk in enumerate(chunks):
                 is_first_chunk = (ci == 0)
                 is_last_chunk = (ci == len(chunks) - 1)
                 is_last_of_group = is_last_verse and is_last_chunk
 
-                # 마지막 슬라이드의 마지막 줄에 (group_ref) 추가
-                content = list(chunk)
-                if is_last_of_group:
-                    content[-1] = content[-1] + ' ' + group_ref
-
                 group_slides.append({
                     'verse_num': verse_num,
-                    'content': content,
+                    'content': list(chunk),
                     'is_first_chunk': is_first_chunk,
                     'is_last_of_group': is_last_of_group,
                     'book': book,
