@@ -1,10 +1,12 @@
-import re, os, io, uuid, time, subprocess, shutil, tempfile
+import re, os, io, uuid, time, subprocess, shutil, tempfile, copy
 from pathlib import Path
 from flask import Flask, request, send_file, render_template, jsonify
 from docx import Document
 from docx.shared import RGBColor
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from pptx import Presentation
+from pptx.oxml.ns import qn as pptx_qn
 from ppt_generator import (generate_ppt, parse_title_paragraph,
                             extract_verses, split_to_lines, split_to_slides)
 
@@ -132,6 +134,70 @@ def docx_to_pdf(docx_path: str, out_dir: str) -> str | None:
     return None
 
 
+# ── PPT 병합 ──────────────────────────────────────────────────────────
+
+def _find_sermon_title_slide(prs: Presentation) -> int:
+    """
+    PPT에서 '설교제목' 텍스트가 있는 슬라이드 중 가장 마지막 인덱스를 반환.
+    못 찾으면 -1 반환.
+    """
+    last_idx = -1
+    for i, slide in enumerate(prs.slides):
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    text = ''.join(r.text for r in para.runs)
+                    if '설교제목' in text:
+                        last_idx = i
+                        break
+    return last_idx
+
+
+def merge_ppt(input_ppt_bytes: bytes, generated_ppt_bytes: bytes) -> bytes:
+    """
+    input_ppt에 generated_ppt 슬라이드들을 '설교제목' 슬라이드 직후에 삽입.
+    삽입 위치를 못 찾으면 슬라이드 전체 끝에 추가.
+    """
+    base_prs = Presentation(io.BytesIO(input_ppt_bytes))
+    gen_prs  = Presentation(io.BytesIO(generated_ppt_bytes))
+
+    insert_after = _find_sermon_title_slide(base_prs)
+    insert_pos = insert_after + 1  # 해당 슬라이드 바로 뒤, -1이면 0(맨 앞→실제론 끝에 붙임)
+
+    # 삽입 위치가 -1이면 맨 끝으로
+    if insert_after == -1:
+        insert_pos = len(base_prs.slides)
+
+    sldIdLst = base_prs.slides._sldIdLst
+
+    for gen_slide in gen_prs.slides:
+        # 새 슬라이드 레이아웃 추가
+        layout = base_prs.slide_layouts[0]
+        new_slide = base_prs.slides.add_slide(layout)
+
+        # 레이아웃 자동 도형 제거
+        sp_tree = new_slide.shapes._spTree
+        for child in list(sp_tree):
+            tag = child.tag
+            if tag not in (pptx_qn('p:nvGrpSpPr'), pptx_qn('p:grpSpPr')):
+                sp_tree.remove(child)
+
+        # 생성 슬라이드 도형 복사
+        for shape in gen_slide.shapes:
+            sp_tree.append(copy.deepcopy(shape.element))
+
+        # 방금 추가된 슬라이드 XML 요소를 원하는 위치로 이동
+        added_sldId = sldIdLst[-1]
+        sldIdLst.remove(added_sldId)
+        sldIdLst.insert(insert_pos, added_sldId)
+        insert_pos += 1
+
+    buf = io.BytesIO()
+    base_prs.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
 # ── 세션 정리 ──────────────────────────────────────────────────────────
 
 def _cleanup_old_sessions():
@@ -162,6 +228,10 @@ def process():
         return jsonify({'error': 'DOCX 파일만 업로드 가능합니다.'}), 400
 
     base_name = Path(f.filename).stem   # 예: 2801_설교문_input
+    # 커스텀 파일명 (빈 문자열이면 기본값 사용)
+    custom_name = request.form.get('custom_name', '').strip()
+    out_stem = custom_name if custom_name else base_name
+
     input_bytes = f.read()
 
     doc, red_refs, yellow_refs, yellow_para_texts, title_text = process_document(input_bytes)
@@ -170,12 +240,12 @@ def process():
     session_id = str(uuid.uuid4())
 
     # 1) DOCX 저장
-    docx_out_name = f'{base_name}_output.docx'
+    docx_out_name = f'{out_stem}_output.docx'
     docx_path = os.path.join(tmp_dir, docx_out_name)
     doc.save(docx_path)
 
-    # 2) PDF (입력 파일명 유지: base_name.pdf)
-    pdf_name = f'{base_name}.pdf'
+    # 2) PDF
+    pdf_name = f'{out_stem}.pdf'
     pdf_path = docx_to_pdf(docx_path, tmp_dir)
     if pdf_path:
         final_pdf = os.path.join(tmp_dir, pdf_name)
@@ -183,41 +253,63 @@ def process():
             os.rename(pdf_path, final_pdf)
         pdf_path = final_pdf
 
-    # 3) PPT
+    # 3) 보조본문 PPT 생성
     passage, sermon_title = parse_title_paragraph(title_text)
-    ppt_name = f'{base_name}_output.pptx'
+    ppt_name = f'{out_stem}_보조본문.pptx'
     ppt_path = None
+    generated_ppt_bytes = None
     try:
-        ppt_bytes = generate_ppt(PPT_TEMPLATE, passage, sermon_title, yellow_para_texts)
+        generated_ppt_bytes = generate_ppt(PPT_TEMPLATE, passage, sermon_title, yellow_para_texts)
         ppt_path = os.path.join(tmp_dir, ppt_name)
         with open(ppt_path, 'wb') as pf:
-            pf.write(ppt_bytes)
+            pf.write(generated_ppt_bytes)
     except Exception as e:
         print(f'PPT 생성 오류: {e}')
 
-    # 4) 텍스트
+    # 4) 입력 PPT와 병합 → 최종 PPT
+    merged_ppt_path = None
+    merged_ppt_name = None
+    input_ppt_file = request.files.get('input_ppt')
+    if input_ppt_file and input_ppt_file.filename.lower().endswith('.pptx') and generated_ppt_bytes:
+        input_ppt_stem = Path(input_ppt_file.filename).stem
+        merged_ppt_name = f'최종_{input_ppt_stem}.pptx'
+        try:
+            input_ppt_bytes = input_ppt_file.read()
+            merged_bytes = merge_ppt(input_ppt_bytes, generated_ppt_bytes)
+            merged_ppt_path = os.path.join(tmp_dir, merged_ppt_name)
+            with open(merged_ppt_path, 'wb') as mf:
+                mf.write(merged_bytes)
+        except Exception as e:
+            print(f'PPT 병합 오류: {e}')
+            merged_ppt_path = None
+
+    # 5) 텍스트
     refs_text = build_refs_text(title_text, red_refs, yellow_refs)
 
     # 세션 저장
     SESSIONS[session_id] = {
         'created': time.time(),
         'dir': tmp_dir,
-        'docx': docx_path if os.path.exists(docx_path) else None,
-        'pdf':  pdf_path  if pdf_path and os.path.exists(pdf_path) else None,
-        'ppt':  ppt_path  if ppt_path and os.path.exists(ppt_path) else None,
-        'docx_name': docx_out_name,
-        'pdf_name':  pdf_name,
-        'ppt_name':  ppt_name,
+        'docx':   docx_path if os.path.exists(docx_path) else None,
+        'pdf':    pdf_path  if pdf_path and os.path.exists(pdf_path) else None,
+        'ppt':    ppt_path  if ppt_path and os.path.exists(ppt_path) else None,
+        'merged': merged_ppt_path if merged_ppt_path and os.path.exists(merged_ppt_path) else None,
+        'docx_name':   docx_out_name,
+        'pdf_name':    pdf_name,
+        'ppt_name':    ppt_name,
+        'merged_name': merged_ppt_name,
     }
 
     return jsonify({
-        'session_id': session_id,
-        'refs_text':  refs_text,
-        'has_pdf':    bool(SESSIONS[session_id]['pdf']),
-        'has_ppt':    bool(SESSIONS[session_id]['ppt']),
-        'docx_name':  docx_out_name,
-        'pdf_name':   pdf_name,
-        'ppt_name':   ppt_name,
+        'session_id':   session_id,
+        'refs_text':    refs_text,
+        'has_pdf':      bool(SESSIONS[session_id]['pdf']),
+        'has_ppt':      bool(SESSIONS[session_id]['ppt']),
+        'has_merged':   bool(SESSIONS[session_id]['merged']),
+        'docx_name':    docx_out_name,
+        'pdf_name':     pdf_name,
+        'ppt_name':     ppt_name,
+        'merged_name':  merged_ppt_name or '',
     })
 
 
@@ -227,10 +319,12 @@ def download(session_id, file_type):
     if not sess:
         return '세션이 만료됐습니다.', 404
 
+    PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     file_map = {
-        'docx': (sess['docx'], sess['docx_name'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-        'pdf':  (sess['pdf'],  sess['pdf_name'],  'application/pdf'),
-        'ppt':  (sess['ppt'],  sess['ppt_name'],  'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+        'docx':   (sess['docx'],   sess['docx_name'],   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        'pdf':    (sess['pdf'],    sess['pdf_name'],    'application/pdf'),
+        'ppt':    (sess['ppt'],    sess['ppt_name'],    PPTX_MIME),
+        'merged': (sess.get('merged'), sess.get('merged_name'), PPTX_MIME),
     }
     if file_type not in file_map:
         return '잘못된 요청', 400

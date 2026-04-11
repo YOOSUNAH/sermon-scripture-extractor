@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>설교문 처리기</title>
+<title>설교문에서 본문,보조본문 추출하기</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -22,7 +22,16 @@ body {
   padding: 28px 28px;
 }
 h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
-.subtitle { color: #718096; font-size: .88rem; margin-bottom: 24px; }
+.subtitle { color: #718096; font-size: .88rem; margin-bottom: 14px; }
+
+/* ── 처리 규칙 ── */
+.legend { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; background: #f7fafc; }
+.legend-title { font-size: .78rem; color: #a0aec0; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 8px; }
+.legend-item { display: flex; align-items: center; gap: 10px; font-size: .83rem; color: #4a5568; margin-bottom: 5px; }
+.legend-item:last-child { margin-bottom: 0; }
+.swatch { width: 28px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.swatch-red { background: #ff4444; }
+.swatch-yellow { background: #ffd700; }
 
 /* ── 드롭존 ── */
 .drop-zone {
@@ -48,6 +57,35 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
 }
 .file-selected.show { display: flex; }
 
+/* ── 커스텀 파일명 ── */
+.field-group { margin-top: 16px; }
+.field-label { font-size: .82rem; color: #4a5568; font-weight: 600; margin-bottom: 6px; display: block; }
+.field-input {
+  width: 100%; padding: 9px 12px;
+  border: 1.5px solid #e2e8f0; border-radius: 8px;
+  font-size: .88rem; color: #2d3748; background: #f7fafc;
+  transition: border-color .15s;
+}
+.field-input:focus { outline: none; border-color: #4299e1; background: #fff; }
+.field-hint { font-size: .76rem; color: #a0aec0; margin-top: 4px; }
+
+/* ── PPT 업로드 ── */
+.ppt-upload-area {
+  margin-top: 16px; border: 1.5px dashed #cbd5e0; border-radius: 10px;
+  padding: 18px 16px; text-align: center; cursor: pointer;
+  background: #fafafa; transition: all .18s;
+}
+.ppt-upload-area:hover, .ppt-upload-area.drag-over { border-color: #805ad5; background: #faf5ff; }
+.ppt-upload-area p { font-size: .86rem; color: #718096; }
+.ppt-upload-area .hint { font-size: .78rem; color: #a0aec0; margin-top: 4px; }
+#ppt-input { display: none; }
+.ppt-selected {
+  display: none; align-items: center; gap: 8px; margin-top: 10px;
+  background: #faf5ff; border: 1px solid #d6bcfa; border-radius: 8px;
+  padding: 9px 14px; font-size: .86rem; color: #553c9a;
+}
+.ppt-selected.show { display: flex; }
+
 .btn-primary {
   display: block; width: 100%; margin-top: 16px;
   padding: 13px; background: #3182ce; color: #fff;
@@ -70,7 +108,8 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
 .result-card { display: none; }
 .result-card.show { display: block; }
 .result-card h3 { font-size: .93rem; font-weight: 600; color: #276749; margin-bottom: 14px; }
-.dl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.dl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.dl-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .dl-btn {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   background: #f7fafc; border: 1.5px solid #e2e8f0; border-radius: 10px;
@@ -81,6 +120,8 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
 .dl-btn:hover { background: #ebf8ff; border-color: #90cdf4; color: #2b6cb0; }
 .dl-btn .icon { font-size: 1.8rem; }
 .dl-btn.disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
+.dl-btn.merged-btn { border-color: #d6bcfa; background: #faf5ff; color: #553c9a; }
+.dl-btn.merged-btn:hover { background: #e9d8fd; border-color: #b794f4; }
 
 /* ── 텍스트 패널 ── */
 .text-panel { display: none; }
@@ -114,14 +155,6 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
   padding: 14px 16px; color: #c53030; font-size: .86rem;
 }
 .error-box.show { display: block; }
-
-/* ── 범례 ── */
-.legend { border-top: 1px solid #e2e8f0; padding-top: 18px; margin-top: 4px; }
-.legend-title { font-size: .78rem; color: #a0aec0; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 10px; }
-.legend-item { display: flex; align-items: center; gap: 10px; font-size: .83rem; color: #4a5568; margin-bottom: 7px; }
-.swatch { width: 28px; height: 12px; border-radius: 3px; flex-shrink: 0; }
-.swatch-red { background: #ff4444; }
-.swatch-yellow { background: #ffd700; }
 </style>
 </head>
 <body>
@@ -129,8 +162,14 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
 
   <!-- 업로드 카드 -->
   <div class="card">
-    <h1>📖 설교문 처리기</h1>
+    <h1>📖 설교문에서 본문,보조본문 추출하기</h1>
     <p class="subtitle">DOCX 파일을 업로드하면 본문·보조본문을 자동으로 색상 표시하고 참조를 추출합니다.</p>
+
+    <div class="legend">
+      <div class="legend-title">처리 규칙</div>
+      <div class="legend-item"><div class="swatch swatch-red"></div><span><strong>빨간색</strong> — <code>숫자:숫자</code>로 시작하는 단락 (본문)</span></div>
+      <div class="legend-item"><div class="swatch swatch-yellow"></div><span><strong>노란 밑줄</strong> — <code>문자 숫자:숫자</code>로 시작하는 단락 (보조본문)</span></div>
+    </div>
 
     <div class="drop-zone" id="drop-zone">
       <span class="icon">📄</span>
@@ -143,6 +182,24 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
       <span>📎</span><span id="file-name-display"></span>
     </div>
 
+    <!-- 커스텀 파일명 -->
+    <div class="field-group">
+      <label class="field-label" for="custom-name">출력 파일명 (선택)</label>
+      <input type="text" class="field-input" id="custom-name" placeholder="비워두면 입력 파일명 그대로 사용">
+      <p class="field-hint">예) 260405_2부 → 260405_2부_output.docx / 260405_2부.pdf 로 저장</p>
+    </div>
+
+    <!-- PPT 업로드 -->
+    <div class="ppt-upload-area" id="ppt-drop-zone">
+      <p>📊 원본 PPT 파일을 끌어다 놓거나 클릭 (선택 — 보조본문 슬라이드 삽입용)</p>
+      <p class="hint">.pptx 파일만 지원 · 업로드 시 최종_[파일명].pptx 다운로드 가능</p>
+      <input type="file" id="ppt-input" accept=".pptx">
+    </div>
+
+    <div class="ppt-selected" id="ppt-selected">
+      <span>📊</span><span id="ppt-name-display"></span>
+    </div>
+
     <button class="btn-primary" id="process-btn" disabled>처리 시작</button>
 
     <div class="progress-wrap" id="progress-wrap">
@@ -151,18 +208,13 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
     </div>
 
     <div class="error-box" id="error-box"></div>
-
-    <div class="legend">
-      <div class="legend-title">처리 규칙</div>
-      <div class="legend-item"><div class="swatch swatch-red"></div><span><strong>빨간색</strong> — <code>숫자:숫자</code>로 시작하는 단락 (본문)</span></div>
-      <div class="legend-item"><div class="swatch swatch-yellow"></div><span><strong>노란 밑줄</strong> — <code>문자 숫자:숫자</code>로 시작하는 단락 (보조본문)</span></div>
-    </div>
   </div>
 
   <!-- 다운로드 카드 -->
   <div class="card result-card" id="result-card">
     <h3>✅ 처리 완료 — 파일을 개별 다운로드하세요</h3>
-    <div class="dl-grid">
+    <!-- 기본 3개 (DOCX, PDF, PPT) -->
+    <div class="dl-grid" id="dl-grid-main">
       <a class="dl-btn" id="dl-docx" href="#" download>
         <span class="icon">📝</span>
         <span>DOCX</span>
@@ -175,8 +227,13 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
       </a>
       <a class="dl-btn" id="dl-ppt" href="#">
         <span class="icon">📊</span>
-        <span>PPT</span>
+        <span>보조본문 PPT</span>
         <span id="dl-ppt-name" style="font-weight:400;color:#718096;font-size:.75rem;text-align:center"></span>
+      </a>
+      <a class="dl-btn merged-btn" id="dl-merged" href="#" style="display:none">
+        <span class="icon">🎯</span>
+        <span>최종 PPT</span>
+        <span id="dl-merged-name" style="font-weight:400;color:#718096;font-size:.75rem;text-align:center"></span>
       </a>
     </div>
   </div>
@@ -200,6 +257,10 @@ const dropZone   = document.getElementById('drop-zone');
 const fileInput  = document.getElementById('file-input');
 const fileSelected = document.getElementById('file-selected');
 const fileNameDisplay = document.getElementById('file-name-display');
+const pptDropZone  = document.getElementById('ppt-drop-zone');
+const pptInput     = document.getElementById('ppt-input');
+const pptSelected  = document.getElementById('ppt-selected');
+const pptNameDisplay = document.getElementById('ppt-name-display');
 const processBtn = document.getElementById('process-btn');
 const progressWrap = document.getElementById('progress-wrap');
 const resultCard = document.getElementById('result-card');
@@ -208,8 +269,9 @@ const refsBox    = document.getElementById('refs-box');
 const errorBox   = document.getElementById('error-box');
 
 let selectedFile = null;
-let currentSessionId = null;
+let selectedPpt  = null;
 
+// ── DOCX 드롭존 ──────────────────────────────────────────────────────
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
@@ -224,12 +286,32 @@ function setFile(file) {
   selectedFile = file;
   fileNameDisplay.textContent = file.name;
   fileSelected.classList.add('show');
+  // 커스텀 파일명 placeholder 업데이트
+  document.getElementById('custom-name').placeholder = file.name.replace(/\.docx$/i, '');
   processBtn.disabled = false;
   resultCard.classList.remove('show');
   textPanel.classList.remove('show');
   errorBox.classList.remove('show');
 }
 
+// ── PPT 드롭존 ───────────────────────────────────────────────────────
+pptDropZone.addEventListener('click', () => pptInput.click());
+pptDropZone.addEventListener('dragover', e => { e.preventDefault(); pptDropZone.classList.add('drag-over'); });
+pptDropZone.addEventListener('dragleave', () => pptDropZone.classList.remove('drag-over'));
+pptDropZone.addEventListener('drop', e => {
+  e.preventDefault(); pptDropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) setPpt(e.dataTransfer.files[0]);
+});
+pptInput.addEventListener('change', e => { if (e.target.files[0]) setPpt(e.target.files[0]); });
+
+function setPpt(file) {
+  if (!file.name.toLowerCase().endsWith('.pptx')) { showError('PPT는 .pptx 파일만 지원합니다.'); return; }
+  selectedPpt = file;
+  pptNameDisplay.textContent = file.name;
+  pptSelected.classList.add('show');
+}
+
+// ── 처리 ─────────────────────────────────────────────────────────────
 processBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
   processBtn.disabled = true;
@@ -240,22 +322,30 @@ processBtn.addEventListener('click', async () => {
 
   const form = new FormData();
   form.append('file', selectedFile);
+  const customName = document.getElementById('custom-name').value.trim();
+  if (customName) form.append('custom_name', customName);
+  if (selectedPpt) form.append('input_ppt', selectedPpt);
 
   try {
     const resp = await fetch('/process', { method: 'POST', body: form });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || '서버 오류');
 
-    currentSessionId = data.session_id;
-
     // 다운로드 버튼 설정
     setupDlBtn('dl-docx', 'dl-docx-name', data.session_id, 'docx', data.docx_name, true);
     setupDlBtn('dl-pdf',  'dl-pdf-name',  data.session_id, 'pdf',  data.pdf_name,  data.has_pdf);
     setupDlBtn('dl-ppt',  'dl-ppt-name',  data.session_id, 'ppt',  data.ppt_name,  data.has_ppt);
 
-    // 텍스트 표시
-    refsBox.textContent = data.refs_text;
+    // 최종 PPT 버튼
+    const dlMerged = document.getElementById('dl-merged');
+    if (data.has_merged) {
+      setupDlBtn('dl-merged', 'dl-merged-name', data.session_id, 'merged', data.merged_name, true);
+      dlMerged.style.display = 'flex';
+    } else {
+      dlMerged.style.display = 'none';
+    }
 
+    refsBox.textContent = data.refs_text;
     progressWrap.classList.remove('show');
     resultCard.classList.add('show');
     textPanel.classList.add('show');
@@ -281,7 +371,7 @@ function setupDlBtn(btnId, nameId, sessionId, fileType, fileName, available) {
   }
 }
 
-// ── 복사 버튼 ──────────────────────────────────────────────────────
+// ── 복사 버튼 ──────────────────────────────────────────────────────────
 document.getElementById('copy-all-btn').addEventListener('click', () => {
   copyText(refsBox.textContent, 'copy-all-btn');
 });

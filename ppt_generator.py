@@ -13,6 +13,7 @@ from pptx.oxml.ns import qn
 FONT_NAME = '나눔고딕 ExtraBold'
 BLUE  = RGBColor(0x00, 0xB0, 0xF0)
 GREEN = RGBColor(0x00, 0xB0, 0x50)
+WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 
 # ── 줄 분리 설정 ──────────────────────────────────────────────────────
 CHARS_PER_LINE = 22   # 한 줄 최대 글자 수 (한국어 기준)
@@ -149,12 +150,12 @@ def _make_verse_slide(out_prs, template_normal, template_slash,
     # 절 번호 (TextBox 7)
     tb7 = _get_shape(slide, 'TextBox 7')
     if tb7 and tb7.has_text_frame:
-        _set_tf(tb7.text_frame, [verse_num], font_size=36)
+        _set_tf(tb7.text_frame, [verse_num], font_size=36, color=WHITE)
 
     # 절 내용 (TextBox 6)
     tb6 = _get_shape(slide, 'TextBox 6')
     if tb6 and tb6.has_text_frame:
-        _set_tf(tb6.text_frame, content_lines, font_size=40)
+        _set_tf(tb6.text_frame, content_lines, font_size=40, color=WHITE)
 
     # 하단 참조 (TextBox 2)
     tb2 = _get_shape(slide, 'TextBox 2')
