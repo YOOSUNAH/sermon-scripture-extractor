@@ -187,6 +187,6 @@ def process():
 
 if __name__ == '__main__':
     import sys
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print(f'서버 시작 → http://0.0.0.0:{port}/')
     app.run(host='0.0.0.0', port=port, debug=False)

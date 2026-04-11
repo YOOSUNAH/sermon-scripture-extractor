@@ -10,7 +10,7 @@
   <array>
     <string>/usr/bin/python3</string>
     <string>/Users/yuseon-a/sermon_processor/app.py</string>
-    <string>5000</string>
+    <string>8000</string>
   </array>
 
   <key>WorkingDirectory</key>

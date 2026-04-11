@@ -17,5 +17,8 @@ server.log
 # macOS
 .DS_Store
 
+# 비공개 설치 문서
+INSTALL_PRIVATE.md
+
 # 업로드 임시 파일
 uploads/

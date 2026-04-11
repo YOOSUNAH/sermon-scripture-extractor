@@ -14,7 +14,7 @@ sudo launchctl load -w "$PLIST_DST"
 
 echo ""
 echo "✅ 완료! 서버가 시작되었고, Mac 재부팅 시에도 자동으로 켜집니다."
-echo "   접속 주소: http://192.9.133.18:5000/"
+echo "   접속 주소: http://192.168.35.80:8000/"
 echo ""
 echo "서버 중지: sudo launchctl unload $PLIST_DST"
 echo "서버 재시작: sudo launchctl kickstart -k system/com.sermon.processor"
