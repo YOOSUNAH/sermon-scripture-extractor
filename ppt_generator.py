@@ -22,9 +22,14 @@ GREEN = RGBColor(0x00, 0xB0, 0x50)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 
 # ── 줄 분리 설정 ──────────────────────────────────────────────────────
-CHARS_PER_LINE = 22   # 한 줄 최대 글자 수 (한국어 기준)
-LINES_PER_SLIDE = 2   # 슬라이드당 최대 줄 수
-MAX_LINE_DISPLAY = 26 # PPT 텍스트박스 한 줄 최대 표시 글자 수 (실측)
+# 슬라이드당 최대 2줄 보장이 최우선 조건.
+# CHARS_PER_LINE을 올리면 실제 PPT 박스에서 자동 줄바꿈이 일어나 3줄로 표시되므로,
+# 실측 안전값 22로 유지한다.
+CHARS_PER_LINE = 22   # 한 줄 최대 글자 수 (한국어 기준, 안전값)
+LINES_PER_SLIDE = 2   # 슬라이드당 최대 줄 수 (초과 금지)
+MAX_LINE_DISPLAY = 22 # PPT 텍스트박스 한 줄 최대 표시 글자 수 (안전값)
+REF_FONT_SIZE = 32    # group_ref(예: "(마 17:22-23)") 폰트 크기
+REF_MARKER = '\u0001' # 런 분리용 내부 마커 (출력 안 됨)
 
 # ── 템플릿 슬라이드 인덱스 (ppt_template.pptx 기준) ──────────────────
 IDX_VERSE_NORMAL = 0   # 보조본문 일반 (하단 참조 있음)
@@ -166,18 +171,36 @@ def _get_shape(slide, name: str):
     return None
 
 
-def _set_tf(tf, lines: list[str], font_size: int = None, color: RGBColor = None):
-    """텍스트 프레임의 내용을 교체."""
+def _set_tf(tf, lines: list[str], font_size: int = None, color: RGBColor = None,
+            ref_size: int = None):
+    """
+    텍스트 프레임의 내용을 교체.
+    line에 REF_MARKER가 있으면 그 이후 문자열을 ref_size 크기로 별도 run 렌더링.
+    """
+    def _style(run, size):
+        run.font.name = FONT_NAME
+        if size:
+            run.font.size = Pt(size)
+        if color:
+            run.font.color.rgb = color
+
     tf.clear()
     for i, line in enumerate(lines):
         para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        run = para.add_run()
-        run.text = line
-        run.font.name = FONT_NAME
-        if font_size:
-            run.font.size = Pt(font_size)
-        if color:
-            run.font.color.rgb = color
+
+        if REF_MARKER in line:
+            before, after = line.split(REF_MARKER, 1)
+            if before:
+                r1 = para.add_run()
+                r1.text = before
+                _style(r1, font_size)
+            r2 = para.add_run()
+            r2.text = after
+            _style(r2, ref_size if ref_size else font_size)
+        else:
+            run = para.add_run()
+            run.text = line
+            _style(run, font_size)
 
 
 def _make_verse_slide(out_prs, template_normal, template_slash,
@@ -196,10 +219,11 @@ def _make_verse_slide(out_prs, template_normal, template_slash,
     if tb7 and tb7.has_text_frame:
         _set_tf(tb7.text_frame, [verse_num], font_size=36, color=WHITE)
 
-    # 절 내용 (TextBox 6)
+    # 절 내용 (TextBox 6) — group_ref는 REF_FONT_SIZE로 축소
     tb6 = _get_shape(slide, 'TextBox 6')
     if tb6 and tb6.has_text_frame:
-        _set_tf(tb6.text_frame, content_lines, font_size=40, color=WHITE)
+        _set_tf(tb6.text_frame, content_lines, font_size=40, color=WHITE,
+                ref_size=REF_FONT_SIZE)
 
     # 하단 참조 (TextBox 2)
     tb2 = _get_shape(slide, 'TextBox 2')
@@ -300,22 +324,26 @@ def generate_ppt(template_path: str,
                 if not chunks:
                     continue  # 이 절 전체를 다음 절로 넘김
 
-            # 마지막 절의 마지막 chunk에 group_ref 추가
+            # 마지막 절의 마지막 chunk에 group_ref 추가 (REF_MARKER로 런 분리 → 축소 렌더)
             if is_last_verse and chunks:
                 # 괄호 안 공백을 non-breaking space로 치환 → PPT 내부에서 줄 분리 방지
                 group_ref_safe = group_ref.replace(' ', '\u00A0')
                 last_line = chunks[-1][-1]
 
-                if len(last_line) + 1 + len(group_ref_safe) <= MAX_LINE_DISPLAY:
-                    # 인라인에 붙여도 한 줄 이내 → 그대로 이어붙임
-                    chunks[-1][-1] = last_line + ' ' + group_ref_safe
+                # group_ref는 REF_FONT_SIZE(32pt) 축소 + 괄호/숫자 위주 narrow chars.
+                # 실측상 content(40pt 한글)의 약 50% 시각 폭을 차지 → 이를 반영해 인라인 판정.
+                ref_visual_width = len(group_ref_safe) * 0.5
+
+                if len(last_line) + 1 + ref_visual_width <= MAX_LINE_DISPLAY:
+                    # group_ref 전체가 같은 줄에 들어감 → 인라인 유지
+                    chunks[-1][-1] = last_line + ' ' + REF_MARKER + group_ref_safe
                 elif len(chunks[-1]) == 1:
-                    # 내용이 1줄뿐 → group_ref를 2번째 줄로 추가
-                    chunks[-1].append(group_ref_safe)
+                    # 내용 1줄 + 인라인 불가 → group_ref를 2번째 줄로 (잘림 방지)
+                    chunks[-1].append(REF_MARKER + group_ref_safe)
                 else:
-                    # 내용이 이미 2줄 → 마지막 줄을 새 chunk로 옮기고 group_ref를 같이
+                    # 내용 2줄 + 인라인 불가 → 마지막 줄을 새 chunk로 옮기고 ref와 함께
                     moved = chunks[-1].pop()
-                    chunks.append([moved, group_ref_safe])
+                    chunks.append([moved, REF_MARKER + group_ref_safe])
 
             for ci, chunk in enumerate(chunks):
                 is_first_chunk = (ci == 0)
