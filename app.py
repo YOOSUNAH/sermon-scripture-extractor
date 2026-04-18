@@ -109,17 +109,7 @@ def build_refs_text(title_text: str, red_refs: list, yellow_refs: list) -> str:
 # ── PDF 변환 ──────────────────────────────────────────────────────────
 
 def docx_to_pdf(docx_path: str, out_dir: str) -> str | None:
-    # 1) docx2pdf (Word 사용, macOS에서 품질 우수)
-    try:
-        from docx2pdf import convert
-        pdf_path = os.path.join(out_dir, Path(docx_path).stem + '.pdf')
-        convert(docx_path, pdf_path)
-        if os.path.exists(pdf_path):
-            return pdf_path
-    except Exception:
-        pass
-
-    # 2) LibreOffice
+    # 1) LibreOffice (headless, 권한 팝업 없음)
     if os.path.exists(LIBREOFFICE):
         try:
             subprocess.run(
@@ -132,6 +122,16 @@ def docx_to_pdf(docx_path: str, out_dir: str) -> str | None:
                 return pdf_path
         except Exception:
             pass
+
+    # 2) docx2pdf 폴백 (Word 사용, 권한 팝업 발생 가능)
+    try:
+        from docx2pdf import convert
+        pdf_path = os.path.join(out_dir, Path(docx_path).stem + '.pdf')
+        convert(docx_path, pdf_path)
+        if os.path.exists(pdf_path):
+            return pdf_path
+    except Exception:
+        pass
     return None
 
 
