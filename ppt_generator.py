@@ -28,6 +28,9 @@ WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 CHARS_PER_LINE = 22   # 한 줄 최대 글자 수 (한국어 기준, 안전값)
 LINES_PER_SLIDE = 2   # 슬라이드당 최대 줄 수 (초과 금지)
 MAX_LINE_DISPLAY = 22 # PPT 텍스트박스 한 줄 최대 표시 글자 수 (안전값)
+# ref(32pt)가 축소된 덕에 content 40pt 기준 22자 이상이어도 시각적으로 들어감.
+# 실측상 실제 텍스트박스 가용폭은 26자 정도 → 인라인 판정은 이 값까지 허용.
+INLINE_WITH_REF_MAX = 26
 REF_FONT_SIZE = 32    # group_ref(예: "(마 17:22-23)") 폰트 크기
 REF_MARKER = '\u0001' # 런 분리용 내부 마커 (출력 안 됨)
 
@@ -332,9 +335,10 @@ def generate_ppt(template_path: str,
 
                 # group_ref는 REF_FONT_SIZE(32pt) 축소 + 괄호/숫자 위주 narrow chars.
                 # 실측상 content(40pt 한글)의 약 50% 시각 폭을 차지 → 이를 반영해 인라인 판정.
+                # 한도는 INLINE_WITH_REF_MAX(실측 가용폭)까지 허용 → 2줄 이내로 최대한 수렴.
                 ref_visual_width = len(group_ref_safe) * 0.5
 
-                if len(last_line) + 1 + ref_visual_width <= MAX_LINE_DISPLAY:
+                if len(last_line) + 1 + ref_visual_width <= INLINE_WITH_REF_MAX:
                     # group_ref 전체가 같은 줄에 들어감 → 인라인 유지
                     chunks[-1][-1] = last_line + ' ' + REF_MARKER + group_ref_safe
                 elif len(chunks[-1]) == 1:
