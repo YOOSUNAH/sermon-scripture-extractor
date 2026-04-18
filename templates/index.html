@@ -71,13 +71,14 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
 
 /* ── PPT 업로드 ── */
 .ppt-upload-area {
-  margin-top: 16px; border: 1.5px dashed #cbd5e0; border-radius: 10px;
-  padding: 18px 16px; text-align: center; cursor: pointer;
+  margin-top: 16px; border: 2px dashed #cbd5e0; border-radius: 10px;
+  padding: 40px 16px; text-align: center; cursor: pointer;
   background: #fafafa; transition: all .18s;
 }
 .ppt-upload-area:hover, .ppt-upload-area.drag-over { border-color: #805ad5; background: #faf5ff; }
-.ppt-upload-area p { font-size: .86rem; color: #718096; }
-.ppt-upload-area .hint { font-size: .78rem; color: #a0aec0; margin-top: 4px; }
+.ppt-upload-area .icon { font-size: 2.6rem; display: block; margin-bottom: 10px; }
+.ppt-upload-area p { color: #4a5568; font-size: .93rem; }
+.ppt-upload-area .hint { color: #a0aec0; font-size: .8rem; margin-top: 5px; }
 #ppt-input { display: none; }
 .ppt-selected {
   display: none; align-items: center; gap: 8px; margin-top: 10px;
@@ -108,7 +109,10 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
 .result-card { display: none; }
 .result-card.show { display: block; }
 .result-card h3 { font-size: .93rem; font-weight: 600; color: #276749; margin-bottom: 14px; }
+.merge-card { display: none; }
+.merge-card.show { display: block; }
 .dl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.dl-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .dl-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .dl-btn {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -123,9 +127,8 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
 .dl-btn.merged-btn { border-color: #d6bcfa; background: #faf5ff; color: #553c9a; }
 .dl-btn.merged-btn:hover { background: #e9d8fd; border-color: #b794f4; }
 
-/* ── 텍스트 패널 ── */
-.text-panel { display: none; }
-.text-panel.show { display: block; }
+/* ── 추출 구절 섹션 ── */
+.refs-section { margin-top: 22px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
 .text-panel-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
@@ -189,17 +192,6 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
       <p class="field-hint">예) 260405_2부 → 260405_2부.docx / 260405_2부.pdf / 260405_2부_보조본문.pptx 로 저장</p>
     </div>
 
-    <!-- PPT 업로드 -->
-    <div class="ppt-upload-area" id="ppt-drop-zone">
-      <p>📊 원본 PPT 파일을 끌어다 놓거나 클릭 (선택 — 보조본문 슬라이드 삽입용)</p>
-      <p class="hint">.pptx 파일만 지원 · 업로드 시 최종_[파일명].pptx 다운로드 가능</p>
-      <input type="file" id="ppt-input" accept=".pptx">
-    </div>
-
-    <div class="ppt-selected" id="ppt-selected">
-      <span>📊</span><span id="ppt-name-display"></span>
-    </div>
-
     <button class="btn-primary" id="process-btn" disabled>처리 시작</button>
 
     <div class="progress-wrap" id="progress-wrap">
@@ -210,11 +202,10 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
     <div class="error-box" id="error-box"></div>
   </div>
 
-  <!-- 다운로드 카드 -->
+  <!-- 다운로드 + 추출 구절 카드 -->
   <div class="card result-card" id="result-card">
     <h3>✅ 처리 완료 — 파일을 개별 다운로드하세요</h3>
-    <!-- 기본 3개 (DOCX, PDF, PPT) -->
-    <div class="dl-grid" id="dl-grid-main">
+    <div class="dl-grid dl-grid-3">
       <a class="dl-btn" id="dl-docx" href="#" download>
         <span class="icon">📝</span>
         <span>DOCX</span>
@@ -230,24 +221,58 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
         <span>보조본문 PPT</span>
         <span id="dl-ppt-name" style="font-weight:400;color:#718096;font-size:.75rem;text-align:center"></span>
       </a>
-      <a class="dl-btn merged-btn" id="dl-merged" href="#" style="display:none">
-        <span class="icon">🎯</span>
-        <span>최종 PPT</span>
-        <span id="dl-merged-name" style="font-weight:400;color:#718096;font-size:.75rem;text-align:center"></span>
-      </a>
+    </div>
+
+    <div class="refs-section">
+      <div class="text-panel-header">
+        <h3>📋 추출된 구절 참조</h3>
+        <div class="copy-btns">
+          <button class="btn-copy" id="copy-all-btn">전체 복사</button>
+          <button class="btn-copy" id="copy-sub-btn">보조본문만 복사</button>
+        </div>
+      </div>
+      <div class="refs-box" id="refs-box"></div>
     </div>
   </div>
 
-  <!-- 텍스트 패널 -->
-  <div class="card text-panel" id="text-panel">
-    <div class="text-panel-header">
-      <h3>📋 추출된 구절 참조</h3>
-      <div class="copy-btns">
-        <button class="btn-copy" id="copy-all-btn">전체 복사</button>
-        <button class="btn-copy" id="copy-sub-btn">보조본문만 복사</button>
-      </div>
+  <!-- PPT 병합 카드 (처리 완료 후 노출) -->
+  <div class="card merge-card" id="merge-card">
+    <h3 style="font-size:.93rem;font-weight:600;color:#2d3748;margin-bottom:6px">📊 원본 PPT와 보조본문 합치기 (선택)</h3>
+    <p class="subtitle">원본 PPT에 위에서 생성된 보조본문 슬라이드를 삽입해 최종본을 만듭니다.</p>
+
+    <div class="ppt-upload-area" id="ppt-drop-zone">
+      <span class="icon">📊</span>
+      <p>원본 PPT 파일을 끌어다 놓거나 클릭하여 선택</p>
+      <p class="hint">.pptx 파일만 지원</p>
+      <input type="file" id="ppt-input" accept=".pptx">
     </div>
-    <div class="refs-box" id="refs-box"></div>
+
+    <div class="ppt-selected" id="ppt-selected">
+      <span>📊</span><span id="ppt-name-display"></span>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="merge-custom-name">출력 파일명 (선택)</label>
+      <input type="text" class="field-input" id="merge-custom-name" placeholder="비워두면 최종_[원본파일명] 으로 저장">
+      <p class="field-hint">예) 260405_2부_최종 → 260405_2부_최종.pptx 로 저장</p>
+    </div>
+
+    <button class="btn-primary" id="merge-btn" disabled>PPT 합치기</button>
+
+    <div class="progress-wrap" id="merge-progress-wrap">
+      <div class="progress-bar-bg"><div class="progress-bar"></div></div>
+      <p class="prog-msg">병합 중…</p>
+    </div>
+
+    <div class="error-box" id="merge-error-box"></div>
+
+    <div id="merge-result" style="display:none;margin-top:16px">
+      <a class="dl-btn merged-btn" id="dl-merged" href="#" style="max-width:240px;margin:0 auto">
+        <span class="icon">🎯</span>
+        <span>최종 PPT 다운로드</span>
+        <span id="dl-merged-name" style="font-weight:400;color:#718096;font-size:.75rem;text-align:center"></span>
+      </a>
+    </div>
   </div>
 
 </div>
@@ -264,12 +289,17 @@ const pptNameDisplay = document.getElementById('ppt-name-display');
 const processBtn = document.getElementById('process-btn');
 const progressWrap = document.getElementById('progress-wrap');
 const resultCard = document.getElementById('result-card');
-const textPanel  = document.getElementById('text-panel');
+const mergeCard  = document.getElementById('merge-card');
+const mergeBtn   = document.getElementById('merge-btn');
+const mergeProgressWrap = document.getElementById('merge-progress-wrap');
+const mergeErrorBox = document.getElementById('merge-error-box');
+const mergeResult = document.getElementById('merge-result');
 const refsBox    = document.getElementById('refs-box');
 const errorBox   = document.getElementById('error-box');
 
 let selectedFile = null;
 let selectedPpt  = null;
+let currentSessionId = null;
 
 // ── DOCX 드롭존 ──────────────────────────────────────────────────────
 dropZone.addEventListener('click', () => fileInput.click());
@@ -290,11 +320,11 @@ function setFile(file) {
   document.getElementById('custom-name').placeholder = file.name.replace(/\.docx$/i, '');
   processBtn.disabled = false;
   resultCard.classList.remove('show');
-  textPanel.classList.remove('show');
+  mergeCard.classList.remove('show');
   errorBox.classList.remove('show');
 }
 
-// ── PPT 드롭존 ───────────────────────────────────────────────────────
+// ── PPT 드롭존 (처리 완료 후 노출) ──────────────────────────────────
 pptDropZone.addEventListener('click', () => pptInput.click());
 pptDropZone.addEventListener('dragover', e => { e.preventDefault(); pptDropZone.classList.add('drag-over'); });
 pptDropZone.addEventListener('dragleave', () => pptDropZone.classList.remove('drag-over'));
@@ -305,10 +335,14 @@ pptDropZone.addEventListener('drop', e => {
 pptInput.addEventListener('change', e => { if (e.target.files[0]) setPpt(e.target.files[0]); });
 
 function setPpt(file) {
-  if (!file.name.toLowerCase().endsWith('.pptx')) { showError('PPT는 .pptx 파일만 지원합니다.'); return; }
+  if (!file.name.toLowerCase().endsWith('.pptx')) { showMergeError('PPT는 .pptx 파일만 지원합니다.'); return; }
   selectedPpt = file;
   pptNameDisplay.textContent = file.name;
   pptSelected.classList.add('show');
+  const stem = file.name.replace(/\.pptx$/i, '');
+  document.getElementById('merge-custom-name').placeholder = `최종_${stem}`;
+  mergeBtn.disabled = false;
+  mergeErrorBox.classList.remove('show');
 }
 
 // ── 처리 ─────────────────────────────────────────────────────────────
@@ -317,38 +351,38 @@ processBtn.addEventListener('click', async () => {
   processBtn.disabled = true;
   progressWrap.classList.add('show');
   resultCard.classList.remove('show');
-  textPanel.classList.remove('show');
+  mergeCard.classList.remove('show');
   errorBox.classList.remove('show');
 
   const form = new FormData();
   form.append('file', selectedFile);
   const customName = document.getElementById('custom-name').value.trim();
   if (customName) form.append('custom_name', customName);
-  if (selectedPpt) form.append('input_ppt', selectedPpt);
 
   try {
     const resp = await fetch('/process', { method: 'POST', body: form });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || '서버 오류');
 
-    // 다운로드 버튼 설정
+    currentSessionId = data.session_id;
+
     setupDlBtn('dl-docx', 'dl-docx-name', data.session_id, 'docx', data.docx_name, true);
     setupDlBtn('dl-pdf',  'dl-pdf-name',  data.session_id, 'pdf',  data.pdf_name,  data.has_pdf);
     setupDlBtn('dl-ppt',  'dl-ppt-name',  data.session_id, 'ppt',  data.ppt_name,  data.has_ppt);
 
-    // 최종 PPT 버튼
-    const dlMerged = document.getElementById('dl-merged');
-    if (data.has_merged) {
-      setupDlBtn('dl-merged', 'dl-merged-name', data.session_id, 'merged', data.merged_name, true);
-      dlMerged.style.display = 'flex';
-    } else {
-      dlMerged.style.display = 'none';
-    }
+    // 병합 카드 초기화
+    selectedPpt = null;
+    pptInput.value = '';
+    pptSelected.classList.remove('show');
+    mergeBtn.disabled = true;
+    mergeResult.style.display = 'none';
+    mergeErrorBox.classList.remove('show');
 
     refsBox.textContent = data.refs_text;
     progressWrap.classList.remove('show');
     resultCard.classList.add('show');
-    textPanel.classList.add('show');
+    // 보조본문 PPT가 만들어진 경우에만 병합 카드 노출
+    if (data.has_ppt) mergeCard.classList.add('show');
   } catch (err) {
     showError(err.message);
     progressWrap.classList.remove('show');
@@ -356,6 +390,39 @@ processBtn.addEventListener('click', async () => {
     processBtn.disabled = false;
   }
 });
+
+// ── PPT 병합 ─────────────────────────────────────────────────────────
+mergeBtn.addEventListener('click', async () => {
+  if (!selectedPpt || !currentSessionId) return;
+  mergeBtn.disabled = true;
+  mergeProgressWrap.classList.add('show');
+  mergeErrorBox.classList.remove('show');
+  mergeResult.style.display = 'none';
+
+  const form = new FormData();
+  form.append('input_ppt', selectedPpt);
+  const mergeCustomName = document.getElementById('merge-custom-name').value.trim();
+  if (mergeCustomName) form.append('custom_name', mergeCustomName);
+
+  try {
+    const resp = await fetch(`/merge/${currentSessionId}`, { method: 'POST', body: form });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '서버 오류');
+
+    setupDlBtn('dl-merged', 'dl-merged-name', currentSessionId, 'merged', data.merged_name, true);
+    mergeResult.style.display = 'block';
+  } catch (err) {
+    showMergeError(err.message);
+  } finally {
+    mergeProgressWrap.classList.remove('show');
+    mergeBtn.disabled = false;
+  }
+});
+
+function showMergeError(msg) {
+  mergeErrorBox.textContent = '⚠️ ' + msg;
+  mergeErrorBox.classList.add('show');
+}
 
 function setupDlBtn(btnId, nameId, sessionId, fileType, fileName, available) {
   const btn = document.getElementById(btnId);

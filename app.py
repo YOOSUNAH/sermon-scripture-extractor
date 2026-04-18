@@ -149,6 +149,21 @@ def _find_section(prs: Presentation, name: str):
     return None
 
 
+def _create_section_after(prs: Presentation, new_name: str, after_name: str):
+    """`after_name` 섹션 바로 뒤에 새 섹션을 생성해 반환. after_name이 없으면 None."""
+    after_sec = _find_section(prs, after_name)
+    if after_sec is None:
+        return None
+    section_lst = after_sec.getparent()
+    new_sec = etree.Element(f'{{{_P14_NS}}}section')
+    new_sec.set('name', new_name)
+    new_sec.set('id', '{' + str(uuid.uuid4()).upper() + '}')
+    etree.SubElement(new_sec, f'{{{_P14_NS}}}sldIdLst')
+    after_idx = list(section_lst).index(after_sec)
+    section_lst.insert(after_idx + 1, new_sec)
+    return new_sec
+
+
 def _section_last_global_pos(prs: Presentation, section_name: str) -> int:
     """
     섹션의 마지막 슬라이드가 global sldIdLst에서 몇 번째 인덱스인지 반환.
@@ -172,7 +187,7 @@ def _section_last_global_pos(prs: Presentation, section_name: str) -> int:
 def merge_ppt(input_ppt_bytes: bytes, generated_ppt_bytes: bytes) -> bytes:
     """
     input_ppt의 '보조본문' 섹션에 generated_ppt 슬라이드를 삽입.
-    '보조본문' 섹션이 없으면 '본문' 섹션 끝 뒤에 삽입.
+    '보조본문' 섹션이 없고 '본문' 섹션이 있으면 '본문' 뒤에 '보조본문' 섹션을 새로 만들어 추가.
     """
     base_prs = Presentation(io.BytesIO(input_ppt_bytes))
     gen_prs  = Presentation(io.BytesIO(generated_ppt_bytes))
@@ -185,8 +200,11 @@ def merge_ppt(input_ppt_bytes: bytes, generated_ppt_bytes: bytes) -> bytes:
         insert_pos = len(base_prs.slides) - 1
     insert_pos += 1   # 본문 마지막 슬라이드 다음
 
-    # '보조본문' 섹션 XML element 및 sldIdLst
+    # '보조본문' 섹션이 없으면 '본문' 다음에 새로 생성
     bojobon_sec = _find_section(base_prs, '보조본문')
+    if bojobon_sec is None:
+        bojobon_sec = _create_section_after(base_prs, '보조본문', '본문')
+
     bojobon_sec_sldIdLst = None
     if bojobon_sec is not None:
         bojobon_sec_sldIdLst = bojobon_sec.find(f'{{{_P14_NS}}}sldIdLst')
@@ -301,24 +319,7 @@ def process():
     except Exception as e:
         print(f'PPT 생성 오류: {e}')
 
-    # 4) 입력 PPT와 병합 → 최종 PPT
-    merged_ppt_path = None
-    merged_ppt_name = None
-    input_ppt_file = request.files.get('input_ppt')
-    if input_ppt_file and input_ppt_file.filename.lower().endswith('.pptx') and generated_ppt_bytes:
-        input_ppt_stem = Path(input_ppt_file.filename).stem
-        merged_ppt_name = f'최종_{input_ppt_stem}.pptx'
-        try:
-            input_ppt_bytes = input_ppt_file.read()
-            merged_bytes = merge_ppt(input_ppt_bytes, generated_ppt_bytes)
-            merged_ppt_path = os.path.join(tmp_dir, merged_ppt_name)
-            with open(merged_ppt_path, 'wb') as mf:
-                mf.write(merged_bytes)
-        except Exception as e:
-            print(f'PPT 병합 오류: {e}')
-            merged_ppt_path = None
-
-    # 5) 텍스트
+    # 4) 텍스트
     refs_text = build_refs_text(title_text, red_refs, yellow_refs)
 
     # 세션 저장
@@ -328,11 +329,11 @@ def process():
         'docx':   docx_path if os.path.exists(docx_path) else None,
         'pdf':    pdf_path  if pdf_path and os.path.exists(pdf_path) else None,
         'ppt':    ppt_path  if ppt_path and os.path.exists(ppt_path) else None,
-        'merged': merged_ppt_path if merged_ppt_path and os.path.exists(merged_ppt_path) else None,
+        'merged': None,
         'docx_name':   docx_out_name,
         'pdf_name':    pdf_name,
         'ppt_name':    ppt_name,
-        'merged_name': merged_ppt_name,
+        'merged_name': None,
     }
 
     return jsonify({
@@ -340,11 +341,47 @@ def process():
         'refs_text':    refs_text,
         'has_pdf':      bool(SESSIONS[session_id]['pdf']),
         'has_ppt':      bool(SESSIONS[session_id]['ppt']),
-        'has_merged':   bool(SESSIONS[session_id]['merged']),
         'docx_name':    docx_out_name,
         'pdf_name':     pdf_name,
         'ppt_name':     ppt_name,
-        'merged_name':  merged_ppt_name or '',
+    })
+
+
+@app.route('/merge/<session_id>', methods=['POST'])
+def merge(session_id):
+    sess = SESSIONS.get(session_id)
+    if not sess:
+        return jsonify({'error': '세션이 만료됐습니다. 다시 처리해 주세요.'}), 404
+    if not sess.get('ppt') or not os.path.exists(sess['ppt']):
+        return jsonify({'error': '보조본문 PPT가 없어 병합할 수 없습니다.'}), 400
+
+    input_ppt_file = request.files.get('input_ppt')
+    if not input_ppt_file or not input_ppt_file.filename.lower().endswith('.pptx'):
+        return jsonify({'error': 'PPTX 파일을 업로드해 주세요.'}), 400
+
+    with open(sess['ppt'], 'rb') as f:
+        generated_ppt_bytes = f.read()
+
+    try:
+        input_ppt_bytes = input_ppt_file.read()
+        merged_bytes = merge_ppt(input_ppt_bytes, generated_ppt_bytes)
+    except Exception as e:
+        return jsonify({'error': f'PPT 병합 오류: {e}'}), 500
+
+    custom_name = request.form.get('custom_name', '').strip()
+    input_ppt_stem = Path(input_ppt_file.filename).stem
+    merged_stem = custom_name if custom_name else f'최종_{input_ppt_stem}'
+    merged_ppt_name = f'{merged_stem}.pptx'
+    merged_ppt_path = os.path.join(sess['dir'], merged_ppt_name)
+    with open(merged_ppt_path, 'wb') as mf:
+        mf.write(merged_bytes)
+
+    sess['merged'] = merged_ppt_path
+    sess['merged_name'] = merged_ppt_name
+
+    return jsonify({
+        'has_merged':  True,
+        'merged_name': merged_ppt_name,
     })
 
 
