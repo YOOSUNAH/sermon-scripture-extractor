@@ -42,9 +42,8 @@ def set_paragraph_red(para):
         run.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
 
 
-def set_paragraph_yellow_underline(para):
+def set_paragraph_yellow_highlight(para):
     for run in para.runs:
-        run.font.underline = True
         rPr = _get_or_add_rPr(run)
         for ex in rPr.findall(qn('w:highlight')):
             rPr.remove(ex)
@@ -87,7 +86,7 @@ def process_document(input_bytes: bytes):
             if ref:
                 red_refs.append(ref)
         elif YELLOW_PATTERN.match(text):
-            set_paragraph_yellow_underline(para)
+            set_paragraph_yellow_highlight(para)
             ref = extract_reference(text, is_yellow=True)
             if ref:
                 yellow_refs.append(ref)
@@ -276,7 +275,7 @@ def process():
     session_id = str(uuid.uuid4())
 
     # 1) DOCX 저장
-    docx_out_name = f'{out_stem}_output.docx'
+    docx_out_name = f'{out_stem}.docx'
     docx_path = os.path.join(tmp_dir, docx_out_name)
     doc.save(docx_path)
 
