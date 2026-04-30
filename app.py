@@ -14,7 +14,9 @@ from ppt_generator import (generate_ppt, parse_title_paragraph,
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
-LIBREOFFICE = '/Applications/LibreOffice.app/Contents/MacOS/soffice'
+LIBREOFFICE = (os.environ.get('LIBREOFFICE_PATH')
+               or shutil.which('soffice')
+               or '/Applications/LibreOffice.app/Contents/MacOS/soffice')
 PPT_TEMPLATE = os.path.join(os.path.dirname(__file__), 'ppt_template.pptx')
 
 # 세션 임시 저장소

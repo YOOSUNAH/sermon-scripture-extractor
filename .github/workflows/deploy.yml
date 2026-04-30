@@ -1,0 +1,33 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd /opt/sermon
+            git fetch origin main
+            git reset --hard origin/main
+            source .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            sudo cp deploy/sermon.service /etc/systemd/system/sermon.service
+            sudo cp deploy/nginx.conf /etc/nginx/sites-available/sermon
+            sudo systemctl daemon-reload
+            sudo systemctl restart sermon
+            sudo nginx -t && sudo systemctl reload nginx
+            sleep 2
+            sudo systemctl is-active sermon

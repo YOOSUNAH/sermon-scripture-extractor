@@ -1,0 +1,24 @@
+[Unit]
+Description=Sermon Scripture Extractor (Flask + Gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sermon
+Environment="PATH=/opt/sermon/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="LIBREOFFICE_PATH=/usr/bin/soffice"
+Environment="HOME=/home/ubuntu"
+ExecStart=/opt/sermon/.venv/bin/gunicorn \
+    --workers 2 \
+    --timeout 300 \
+    --bind 127.0.0.1:8000 \
+    --access-logfile - \
+    --error-logfile - \
+    app:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
