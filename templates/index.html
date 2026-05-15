@@ -56,6 +56,15 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
   padding: 9px 14px; font-size: .86rem; color: #2b6cb0;
 }
 .file-selected.show { display: flex; }
+.file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-clear {
+  flex-shrink: 0; width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 50%;
+  font-size: 1rem; line-height: 1; color: inherit; opacity: .55;
+  cursor: pointer; transition: all .15s;
+}
+.btn-clear:hover { opacity: 1; background: rgba(0,0,0,.08); }
 
 /* ── 커스텀 파일명 ── */
 .field-group { margin-top: 16px; }
@@ -182,7 +191,9 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
     </div>
 
     <div class="file-selected" id="file-selected">
-      <span>📎</span><span id="file-name-display"></span>
+      <span>📎</span>
+      <span class="file-name" id="file-name-display"></span>
+      <button type="button" class="btn-clear" id="file-clear-btn" aria-label="파일 제거" title="파일 제거">✕</button>
     </div>
 
     <!-- 커스텀 파일명 -->
@@ -248,7 +259,9 @@ h1 { font-size: 1.45rem; font-weight: 700; color: #1a202c; margin-bottom: 4px; }
     </div>
 
     <div class="ppt-selected" id="ppt-selected">
-      <span>📊</span><span id="ppt-name-display"></span>
+      <span>📊</span>
+      <span class="file-name" id="ppt-name-display"></span>
+      <button type="button" class="btn-clear" id="ppt-clear-btn" aria-label="파일 제거" title="파일 제거">✕</button>
     </div>
 
     <div class="field-group">
@@ -311,6 +324,18 @@ dropZone.addEventListener('drop', e => {
 });
 fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
 
+document.getElementById('file-clear-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  selectedFile = null;
+  fileInput.value = '';
+  fileNameDisplay.textContent = '';
+  fileSelected.classList.remove('show');
+  document.getElementById('custom-name').value = '';
+  document.getElementById('custom-name').placeholder = '비워두면 입력 파일명 그대로 사용';
+  processBtn.disabled = true;
+  errorBox.classList.remove('show');
+});
+
 function setFile(file) {
   if (!file.name.toLowerCase().endsWith('.docx')) { showError('DOCX 파일만 업로드 가능합니다.'); return; }
   selectedFile = file;
@@ -333,6 +358,18 @@ pptDropZone.addEventListener('drop', e => {
   if (e.dataTransfer.files[0]) setPpt(e.dataTransfer.files[0]);
 });
 pptInput.addEventListener('change', e => { if (e.target.files[0]) setPpt(e.target.files[0]); });
+
+document.getElementById('ppt-clear-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  selectedPpt = null;
+  pptInput.value = '';
+  pptNameDisplay.textContent = '';
+  pptSelected.classList.remove('show');
+  document.getElementById('merge-custom-name').value = '';
+  document.getElementById('merge-custom-name').placeholder = '비워두면 최종_[원본파일명] 으로 저장';
+  mergeBtn.disabled = true;
+  mergeErrorBox.classList.remove('show');
+});
 
 function setPpt(file) {
   if (!file.name.toLowerCase().endsWith('.pptx')) { showMergeError('PPT는 .pptx 파일만 지원합니다.'); return; }
