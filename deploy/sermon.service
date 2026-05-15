@@ -11,7 +11,8 @@ Environment="PATH=/opt/sermon/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="LIBREOFFICE_PATH=/usr/bin/soffice"
 Environment="HOME=/home/ubuntu"
 ExecStart=/opt/sermon/.venv/bin/gunicorn \
-    --workers 2 \
+    --workers 1 \
+    --threads 4 \
     --timeout 300 \
     --bind 127.0.0.1:8000 \
     --access-logfile - \
